@@ -18,6 +18,7 @@ import { PostDetailScreen } from './src/screens/PostDetailScreen';
 import { BookmarksScreen } from './src/screens/BookmarksScreen';
 import { DatabaseSetupScreen } from './src/screens/DatabaseSetupScreen';
 import { CreatePostModal } from './src/components/CreatePostModal';
+import { Post } from './src/types/blog';
 
 type Tab = 'home' | 'bookmarks' | 'db';
 
@@ -26,7 +27,7 @@ function MainApp() {
   const { bookmarkedPosts, databaseStatus } = useBlog();
 
   const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isComposeVisible, setIsComposeVisible] = useState(false);
 
   // If viewing a single post detail
@@ -47,14 +48,14 @@ function MainApp() {
       <View style={styles.content}>
         {activeTab === 'home' && (
           <HomeScreen
-            onSelectPost={(post) => setSelectedPost(post)}
+            onSelectPost={(post: Post) => setSelectedPost(post)}
             onOpenDatabaseInfo={() => setActiveTab('db')}
           />
         )}
 
         {activeTab === 'bookmarks' && (
           <BookmarksScreen
-            onSelectPost={(post) => setSelectedPost(post)}
+            onSelectPost={(post: Post) => setSelectedPost(post)}
             onExplore={() => setActiveTab('home')}
           />
         )}
@@ -72,7 +73,6 @@ function MainApp() {
             {
               backgroundColor: colors.card,
               borderColor: colors.cardBorder,
-              shadowColor: isDark ? '#000' : '#64748B',
             },
           ]}
         >
@@ -193,6 +193,7 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    height: Platform.OS === 'web' ? ('100vh' as any) : '100%',
     paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
   },
   content: {
@@ -215,9 +216,6 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     borderWidth: 1,
     paddingHorizontal: 16,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
     elevation: 10,
   },
   navItem: {
@@ -265,10 +263,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
     elevation: 8,
     marginHorizontal: 4,
   },

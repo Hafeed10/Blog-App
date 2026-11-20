@@ -5,11 +5,17 @@ export interface Post {
   slug: string;
   content: string;
   cover_image: string;
+  cover_style?: 'banner' | 'magazine' | 'minimal';
+  images?: string[];
+  audio_url?: string;
+  audio_title?: string;
+  audio_duration?: string;
   category: string;
   read_time: string;
   author_name: string;
   author_avatar?: string;
   author_role?: string;
+  author_phone?: string;
   likes_count: number;
   is_featured?: boolean;
   created_at: string;

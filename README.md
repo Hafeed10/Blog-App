@@ -34,9 +34,8 @@ A next-generation ("New Model Design") editorial blog application built with **R
 ### Quick 1-Click Database Setup:
 1. Open your Supabase Dashboard:
 2. Click **SQL Editor** on the left navigation bar.
-3. Open the file **`supabase-schema.sql`** in this project directory.
-4. Copy its contents, paste them into the Supabase SQL Editor, and click **Run**.
-5. Return to the app and tap **Database -> Test & Recheck Connection**. Your app will instantly switch to live cloud database mode!
+3. Copy its contents, paste them into the Supabase SQL Editor, and click **Run**.
+4. Return to the app and tap **Database -> Test & Recheck Connection**. Your app will instantly switch to live cloud database mode!
 
 ---
 
@@ -59,35 +58,4 @@ npm run web
 
 ---
 
-## 📁 Project Architecture
 
-```
-Blog/
-├── App.js                      # Root app entry with Safe Area, Theme & Navigation
-├── app.json                    # Expo configuration
-├── metro.config.js             # Metro bundler config with web resolution alias
-├── supabase-schema.sql         # 1-Click Supabase PostgreSQL schema & seed data
-├── package.json                # Dependencies (Expo, Supabase, Safe Area, Icons)
-└── src/
-    ├── types/
-    │   └── blog.ts             # Post, Comment, Category TypeScript definitions
-    ├── services/
-    │   └── supabase.ts         # Supabase client, health check, CRUD & sync
-    ├── context/
-    │   ├── ThemeContext.tsx    # OLED Dark / Light mode provider
-    │   └── BlogContext.tsx     # Posts feed, bookmarks, likes, search & filters
-    ├── components/
-    │   ├── Header.tsx          # Frosted header with live DB status badge & avatar
-    │   ├── CategoryFilter.tsx  # Horizontal scrollable filter pills
-    │   ├── HeroCarousel.tsx    # Featured story banner with gradient overlay
-    │   ├── PostCard.tsx        # Magazine card layout with like & bookmark actions
-    │   ├── CreatePostModal.tsx # Compose sheet with cover presets & publish flow
-    │   └── DatabaseStatusBanner.tsx # Live cloud / local status indicator
-    ├── data/
-    │   └── mockPosts.ts        # Fallback editorial articles with Unsplash photos
-    └── screens/
-        ├── HomeScreen.tsx           # Main magazine feed with search & pull-to-refresh
-        ├── PostDetailScreen.tsx     # Full reader with audio preview & comments
-        ├── BookmarksScreen.tsx      # Saved offline reading list
-        └── DatabaseSetupScreen.tsx  # Interactive Supabase setup guide & SQL preview
-```

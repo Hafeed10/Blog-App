@@ -35,7 +35,7 @@ export const CategoryFilter: React.FC = () => {
               styles.pill,
               {
                 backgroundColor: isActive ? colors.primary : colors.card,
-                borderColor: isActive ? colors.primary : colors.cardBorder,
+                borderColor: isActive ? 'transparent' : colors.cardBorder,
               },
             ]}
           >

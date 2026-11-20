@@ -77,33 +77,93 @@ export async function fetchRemotePosts(): Promise<{ posts: Post[] | null; error:
 }
 
 /**
- * Insert a new post to Supabase
+ * Insert a new post to Supabase with support for creation time, cover style, images, and audio
  */
-export async function insertRemotePost(post: Omit<Post, 'id' | 'created_at' | 'likes_count'>): Promise<{ post: Post | null; error: any }> {
+export async function insertRemotePost(
+  post: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string }
+): Promise<{ post: Post | null; error: any }> {
   try {
+    const basePayload: Record<string, any> = {
+      title: post.title,
+      subtitle: post.subtitle || '',
+      slug: post.slug,
+      content: post.content,
+      cover_image: post.cover_image,
+      category: post.category,
+      read_time: post.read_time,
+      author_name: post.author_name,
+      author_avatar: post.author_avatar,
+      author_role: post.author_role,
+      likes_count: 0,
+      is_featured: post.is_featured || false,
+    };
+
+    if (post.created_at) {
+      basePayload.created_at = post.created_at;
+    }
+    if (post.cover_style) {
+      basePayload.cover_style = post.cover_style;
+    }
+    if (post.images && post.images.length > 0) {
+      basePayload.images = post.images;
+    }
+    if (post.audio_url) {
+      basePayload.audio_url = post.audio_url;
+    }
+    if (post.audio_title) {
+      basePayload.audio_title = post.audio_title;
+    }
+    if (post.audio_duration) {
+      basePayload.audio_duration = post.audio_duration;
+    }
+    if (post.author_phone) {
+      basePayload.author_phone = post.author_phone;
+    }
+
     const { data, error } = await supabase
       .from('posts')
-      .insert([
-        {
-          title: post.title,
-          subtitle: post.subtitle || '',
-          slug: post.slug,
-          content: post.content,
-          cover_image: post.cover_image,
-          category: post.category,
-          read_time: post.read_time,
-          author_name: post.author_name,
-          author_avatar: post.author_avatar,
-          author_role: post.author_role,
-          likes_count: 0,
-          is_featured: post.is_featured || false,
-        },
-      ])
+      .insert([basePayload])
       .select()
       .single();
 
     if (error) {
-      return { post: null, error };
+      // If table doesn't have newer columns yet, fallback to minimal columns
+      const minimalPayload: Record<string, any> = {
+        title: post.title,
+        subtitle: post.subtitle || '',
+        slug: post.slug,
+        content: post.content,
+        cover_image: post.cover_image,
+        category: post.category,
+        read_time: post.read_time,
+        author_name: post.author_name,
+        author_avatar: post.author_avatar,
+        author_role: post.author_role,
+        likes_count: 0,
+        is_featured: post.is_featured || false,
+      };
+      if (post.created_at) minimalPayload.created_at = post.created_at;
+
+      const fallbackRes = await supabase
+        .from('posts')
+        .insert([minimalPayload])
+        .select()
+        .single();
+
+      if (fallbackRes.error) {
+        return { post: null, error: fallbackRes.error };
+      }
+      return {
+        post: {
+          ...fallbackRes.data,
+          cover_style: post.cover_style,
+          images: post.images,
+          audio_url: post.audio_url,
+          audio_title: post.audio_title,
+          audio_duration: post.audio_duration,
+        } as Post,
+        error: null,
+      };
     }
 
     return { post: data as Post, error: null };
@@ -149,7 +209,11 @@ export async function fetchRemoteComments(postId: string): Promise<Comment[]> {
 /**
  * Insert comment for a post
  */
-export async function addRemoteComment(postId: string, userName: string, content: string): Promise<Comment | null> {
+export async function addRemoteComment(
+  postId: string,
+  userName: string,
+  content: string
+): Promise<Comment | null> {
   try {
     const { data, error } = await supabase
       .from('comments')
@@ -158,6 +222,7 @@ export async function addRemoteComment(postId: string, userName: string, content
           post_id: postId,
           user_name: userName,
           content,
+          created_at: new Date().toISOString(),
         },
       ])
       .select()

@@ -3,14 +3,21 @@ import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useBlog } from '../context/BlogContext';
+import { useAuth } from '../context/AuthContext';
+import { DEFAULT_AVATAR } from '../types/auth';
 
 interface HeaderProps {
-  onOpenDatabaseInfo: () => void;
+  onOpenDatabaseInfo?: () => void;
+  showDatabaseStatus?: boolean;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenDatabaseInfo }) => {
+export const Header: React.FC<HeaderProps> = ({
+  onOpenDatabaseInfo,
+  showDatabaseStatus = false,
+}) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const { databaseStatus } = useBlog();
+  const { user, isLoggedIn, setAuthModalVisible, setProfileModalVisible } = useAuth();
 
   return (
     <View style={[styles.container, { borderBottomColor: colors.separator }]}>
@@ -27,39 +34,41 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDatabaseInfo }) => {
       </View>
 
       <View style={styles.right}>
-        {/* Database Status Pill */}
-        <TouchableOpacity
-          onPress={onOpenDatabaseInfo}
-          activeOpacity={0.7}
-          style={[
-            styles.dbBadge,
-            {
-              backgroundColor: databaseStatus.tableExists
-                ? 'rgba(16, 185, 129, 0.15)'
-                : 'rgba(245, 158, 11, 0.15)',
-              borderColor: databaseStatus.tableExists
-                ? 'rgba(16, 185, 129, 0.3)'
-                : 'rgba(245, 158, 11, 0.3)',
-            },
-          ]}
-        >
-          <View
+        {/* Database Status Pill (hidden by default) */}
+        {showDatabaseStatus && (
+          <TouchableOpacity
+            onPress={onOpenDatabaseInfo}
+            activeOpacity={0.7}
             style={[
-              styles.dbDot,
+              styles.dbBadge,
               {
-                backgroundColor: databaseStatus.tableExists ? '#10B981' : '#F59E0B',
+                backgroundColor: databaseStatus.tableExists
+                  ? 'rgba(16, 185, 129, 0.15)'
+                  : 'rgba(245, 158, 11, 0.15)',
+                borderColor: databaseStatus.tableExists
+                  ? 'rgba(16, 185, 129, 0.3)'
+                  : 'rgba(245, 158, 11, 0.3)',
               },
             ]}
-          />
-          <Text
-            style={[
-              styles.dbText,
-              { color: databaseStatus.tableExists ? '#10B981' : '#F59E0B' },
-            ]}
           >
-            {databaseStatus.tableExists ? 'Supabase Live' : 'DB Setup'}
-          </Text>
-        </TouchableOpacity>
+            <View
+              style={[
+                styles.dbDot,
+                {
+                  backgroundColor: databaseStatus.tableExists ? '#10B981' : '#F59E0B',
+                },
+              ]}
+            />
+            <Text
+              style={[
+                styles.dbText,
+                { color: databaseStatus.tableExists ? '#10B981' : '#F59E0B' },
+              ]}
+            >
+              {databaseStatus.tableExists ? 'Supabase Live' : 'DB Setup'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Theme Toggle Button */}
         <TouchableOpacity
@@ -77,13 +86,32 @@ export const Header: React.FC<HeaderProps> = ({ onOpenDatabaseInfo }) => {
           />
         </TouchableOpacity>
 
-        {/* Profile Avatar */}
-        <Image
-          source={{
-            uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&auto=format&fit=crop&q=80',
-          }}
-          style={[styles.avatar, { borderColor: colors.primary }]}
-        />
+        {/* Profile Avatar / Sign In Button */}
+        {isLoggedIn && user ? (
+          <TouchableOpacity
+            onPress={() => setProfileModalVisible(true)}
+            activeOpacity={0.8}
+            style={styles.avatarWrapper}
+          >
+            <Image
+              source={{ uri: user.avatarUrl || DEFAULT_AVATAR }}
+              style={[styles.avatar, { borderColor: colors.primary }]}
+            />
+            <View style={styles.onlineBadge} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setAuthModalVisible(true)}
+            activeOpacity={0.8}
+            style={[
+              styles.signInButton,
+              { backgroundColor: colors.primary },
+            ]}
+          >
+            <Ionicons name="person" size={12} color="#FFF" />
+            <Text style={styles.signInButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -157,5 +185,32 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 1.5,
+  },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  onlineBadge: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  signInButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    gap: 5,
+  },
+  signInButtonText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

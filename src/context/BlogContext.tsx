@@ -28,7 +28,9 @@ interface BlogContextType {
   isLoading: boolean;
   isRefreshing: boolean;
   refreshPosts: () => Promise<void>;
-  createNewPost: (post: Omit<Post, 'id' | 'created_at' | 'likes_count'>) => Promise<{ success: boolean; error?: string }>;
+  createNewPost: (
+    post: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string }
+  ) => Promise<{ success: boolean; error?: string }>;
   databaseStatus: DatabaseStatus;
   recheckDatabase: () => Promise<void>;
 }
@@ -163,12 +165,12 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Create new post
   const createNewPost = async (
-    newPostData: Omit<Post, 'id' | 'created_at' | 'likes_count'>
+    newPostData: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string }
   ): Promise<{ success: boolean; error?: string }> => {
     const optimisticPost: Post = {
       ...newPostData,
       id: `local-${Date.now()}`,
-      created_at: new Date().toISOString(),
+      created_at: newPostData.created_at || new Date().toISOString(),
       likes_count: 0,
     };
 

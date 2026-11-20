@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -166,6 +167,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     height: '100%',
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   sectionHeader: {
     paddingHorizontal: 20,

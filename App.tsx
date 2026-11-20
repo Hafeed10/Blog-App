@@ -13,22 +13,61 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { BlogProvider, useBlog } from './src/context/BlogContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PostDetailScreen } from './src/screens/PostDetailScreen';
 import { BookmarksScreen } from './src/screens/BookmarksScreen';
 import { DatabaseSetupScreen } from './src/screens/DatabaseSetupScreen';
 import { CreatePostModal } from './src/components/CreatePostModal';
+import { AuthModal } from './src/components/AuthModal';
+import { ProfileModal } from './src/components/ProfileModal';
 import { Post } from './src/types/blog';
 
 type Tab = 'home' | 'bookmarks' | 'db';
 
+// Ensure click-time border color and outline are fully removed on web
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  const styleId = 'expo-remove-click-border-style';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      *, *::before, *::after {
+        outline: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      *:focus, *:focus-visible, *:active {
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent !important;
+      }
+      button:focus, input:focus, textarea:focus, select:focus, a:focus, div:focus, [role="button"]:focus, [tabindex]:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+}
+
 function MainApp() {
   const { colors, isDark } = useTheme();
   const { bookmarkedPosts } = useBlog();
+  const { isLoggedIn, promptLoginForAction } = useAuth();
 
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isComposeVisible, setIsComposeVisible] = useState(false);
+
+  const handlePressCompose = () => {
+    if (!isLoggedIn) {
+      promptLoginForAction(() => {
+        setIsComposeVisible(true);
+      }, 'Please sign in or create your author profile first to add a new post.');
+    } else {
+      setIsComposeVisible(true);
+    }
+  };
 
   // If viewing a single post detail
   if (selectedPost) {
@@ -100,7 +139,7 @@ function MainApp() {
           {/* Center Compose (+) Trigger */}
           <TouchableOpacity
             style={[styles.composeButton, { backgroundColor: colors.primary }]}
-            onPress={() => setIsComposeVisible(true)}
+            onPress={handlePressCompose}
             activeOpacity={0.85}
           >
             <Ionicons name="add" size={24} color="#FFFFFF" />
@@ -143,6 +182,10 @@ function MainApp() {
         visible={isComposeVisible}
         onClose={() => setIsComposeVisible(false)}
       />
+
+      {/* Author Auth & Profile Modals */}
+      <AuthModal />
+      <ProfileModal />
     </SafeAreaView>
   );
 }
@@ -151,9 +194,11 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <BlogProvider>
-          <MainApp />
-        </BlogProvider>
+        <AuthProvider>
+          <BlogProvider>
+            <MainApp />
+          </BlogProvider>
+        </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

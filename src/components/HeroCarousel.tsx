@@ -37,15 +37,21 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({ post, onPress }) => 
 
         {/* Top Badges */}
         <View style={styles.topRow}>
-          <View style={styles.badgeRow}>
-            <View style={styles.featuredBadge}>
-              <Ionicons name="flash" size={12} color="#FBBF24" />
-              <Text style={styles.featuredText}>FEATURED</Text>
+            <View style={styles.badgeRow}>
+              <View style={styles.featuredBadge}>
+                <Ionicons name="flash" size={12} color="#FBBF24" />
+                <Text style={styles.featuredText}>FEATURED</Text>
+              </View>
+              <View style={styles.categoryBadge}>
+                <Text style={styles.categoryText}>{post.category}</Text>
+              </View>
+              {(post.audio_url || post.audio_title) && (
+                <View style={styles.audioBadge}>
+                  <Ionicons name="headset" size={11} color="#60A5FA" />
+                  <Text style={styles.audioBadgeText}>AUDIO</Text>
+                </View>
+              )}
             </View>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryText}>{post.category}</Text>
-            </View>
-          </View>
 
           <TouchableOpacity
             onPress={(e) => {
@@ -89,9 +95,17 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({ post, onPress }) => 
               </View>
             </View>
 
-            <View style={styles.readTimeBadge}>
-              <Ionicons name="time-outline" size={13} color="#9CA3AF" />
-              <Text style={styles.readTimeText}>{post.read_time}</Text>
+            <View style={styles.metaRight}>
+              <View style={styles.readTimeBadge}>
+                <Ionicons name="time-outline" size={12} color="#9CA3AF" />
+                <Text style={styles.readTimeText}>{post.read_time}</Text>
+              </View>
+              <Text style={styles.heroDateText}>
+                {new Date(post.created_at).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </Text>
             </View>
           </View>
         </View>
@@ -160,6 +174,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  audioBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  audioBadgeText: {
+    color: '#93C5FD',
+    fontSize: 10,
+    fontWeight: '800',
+  },
   bookmarkButton: {
     width: 36,
     height: 36,
@@ -211,6 +239,11 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontSize: 10,
   },
+  metaRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   readTimeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -218,6 +251,11 @@ const styles = StyleSheet.create({
   },
   readTimeText: {
     color: '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  heroDateText: {
+    color: '#D1D5DB',
     fontSize: 11,
     fontWeight: '600',
   },

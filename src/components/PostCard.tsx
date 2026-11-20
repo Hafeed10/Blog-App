@@ -17,10 +17,19 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
   const bookmarked = isBookmarked(post.id);
   const liked = isLiked(post.id);
 
-  const formattedDate = new Date(post.created_at).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+  const formattedDateTime = () => {
+    try {
+      const d = new Date(post.created_at);
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return post.created_at;
+    }
+  };
 
   return (
     <TouchableOpacity
@@ -34,12 +43,27 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
         },
       ]}
     >
-      {/* Cover Image */}
+      {/* Cover Image & Badges */}
       <View style={styles.imageContainer}>
         <Image source={{ uri: post.cover_image }} style={styles.image} resizeMode="cover" />
-        <View style={styles.categoryBadge}>
-          <Text style={styles.categoryText}>{post.category}</Text>
+        <View style={styles.topBadgesRow}>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryText}>{post.category}</Text>
+          </View>
+          {post.cover_style === 'magazine' && (
+            <View style={styles.magazineTag}>
+              <Text style={styles.magazineTagText}>MAGAZINE</Text>
+            </View>
+          )}
         </View>
+
+        {/* Media count pill if attached images present */}
+        {post.images && post.images.length > 0 && (
+          <View style={styles.photoCountBadge}>
+            <Ionicons name="images" size={11} color="#FFF" />
+            <Text style={styles.photoCountText}>{post.images.length}</Text>
+          </View>
+        )}
       </View>
 
       {/* Details Container */}
@@ -56,7 +80,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
             </Text>
           </View>
           <Text style={[styles.dot, { color: colors.textMuted }]}>•</Text>
-          <Text style={[styles.dateText, { color: colors.textMuted }]}>{formattedDate}</Text>
+          {/* Creation Time display */}
+          <View style={styles.timeWrap}>
+            <Ionicons name="time-outline" size={11} color={colors.textMuted} />
+            <Text style={[styles.dateText, { color: colors.textMuted }]}>{formattedDateTime()}</Text>
+          </View>
         </View>
 
         <Text style={[styles.title, { color: colors.text }]} numberOfLines={2}>
@@ -71,11 +99,23 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
 
         {/* Action Row */}
         <View style={[styles.footer, { borderTopColor: colors.separator }]}>
-          <View style={styles.readTime}>
-            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={[styles.readTimeText, { color: colors.textMuted }]}>
-              {post.read_time}
-            </Text>
+          <View style={styles.leftMetaRow}>
+            <View style={styles.readTime}>
+              <Ionicons name="book-outline" size={13} color={colors.textMuted} />
+              <Text style={[styles.readTimeText, { color: colors.textMuted }]}>
+                {post.read_time}
+              </Text>
+            </View>
+
+            {/* Audio badge if story has audio option */}
+            {(post.audio_url || post.audio_title) && (
+              <View style={[styles.audioPill, { backgroundColor: colors.surface }]}>
+                <Ionicons name="headset" size={12} color={colors.accent} />
+                <Text style={[styles.audioPillText, { color: colors.accent }]}>
+                  {post.audio_duration || 'Audio'}
+                </Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.actions}>
@@ -142,20 +182,54 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  categoryBadge: {
+  topBadgesRow: {
     position: 'absolute',
     top: 12,
     left: 12,
+    right: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  categoryBadge: {
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   categoryText: {
-    color: '#FFFFFF',
+    color: '#FFF',
     fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  magazineTag: {
+    backgroundColor: 'rgba(245, 158, 11, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  magazineTagText: {
+    color: '#000',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  photoCountBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  photoCountText: {
+    color: '#FFF',
+    fontSize: 10,
     fontWeight: '700',
   },
   content: {
@@ -173,16 +247,21 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   avatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
   },
   authorName: {
     fontSize: 12,
     fontWeight: '600',
   },
   dot: {
-    fontSize: 12,
+    fontSize: 10,
+  },
+  timeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   dateText: {
     fontSize: 11,
@@ -191,8 +270,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     lineHeight: 23,
-    marginBottom: 6,
     letterSpacing: -0.2,
+    marginBottom: 6,
   },
   subtitle: {
     fontSize: 13,
@@ -201,10 +280,15 @@ const styles = StyleSheet.create({
   },
   footer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 10,
+    justifyContent: 'space-between',
+    paddingTop: 12,
     borderTopWidth: 1,
+  },
+  leftMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   readTime: {
     flexDirection: 'row',
@@ -212,13 +296,24 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   readTimeText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+  },
+  audioPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  audioPillText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   actionBtn: {
     flexDirection: 'row',

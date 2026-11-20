@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   Share,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useBlog } from '../context/BlogContext';
+import { useAuth } from '../context/AuthContext';
 import { Post, Comment } from '../types/blog';
 import {
   fetchRemoteComments,
@@ -34,9 +36,14 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
     toggleLike,
     databaseStatus,
   } = useBlog();
+  const { user } = useAuth();
 
   const [fontSizeMultiplier, setFontSizeMultiplier] = useState(1);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
+  const [isMuted, setIsMuted] = useState(false);
+
   const [comments, setComments] = useState<Comment[]>([
     {
       id: 'mock-c1',
@@ -55,6 +62,42 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
 
   const bookmarked = isBookmarked(post.id);
   const liked = isLiked(post.id);
+
+  // Audio simulation timer
+  const audioTotalSeconds = 340; // ~5:40 min default
+  const timerRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (isPlayingAudio) {
+      timerRef.current = setInterval(() => {
+        setPlaybackSeconds((prev) => {
+          if (prev >= audioTotalSeconds) {
+            setIsPlayingAudio(false);
+            return 0;
+          }
+          return prev + 1;
+        });
+      }, 1000 / playbackSpeed);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isPlayingAudio, playbackSpeed]);
+
+  const formatSeconds = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const handleToggleSpeed = () => {
+    if (playbackSpeed === 1.0) setPlaybackSpeed(1.25);
+    else if (playbackSpeed === 1.25) setPlaybackSpeed(1.5);
+    else if (playbackSpeed === 1.5) setPlaybackSpeed(2.0);
+    else setPlaybackSpeed(1.0);
+  };
 
   // Load comments
   useEffect(() => {
@@ -82,10 +125,14 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
   const handleAddComment = async () => {
     if (!commentText.trim()) return;
 
+    const authorName = user?.name || 'You (Reader)';
+    const authorAvatar = user?.avatarUrl;
+
     const newComment: Comment = {
       id: `c-${Date.now()}`,
       post_id: post.id,
-      user_name: 'You (Reader)',
+      user_name: authorName,
+      user_avatar: authorAvatar,
       content: commentText.trim(),
       created_at: new Date().toISOString(),
     };
@@ -93,9 +140,9 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
     setIsSubmittingComment(true);
 
     if (databaseStatus.tableExists) {
-      const added = await addRemoteComment(post.id, 'You (Reader)', commentText.trim());
+      const added = await addRemoteComment(post.id, authorName, commentText.trim());
       if (added) {
-        setComments((prev) => [...prev, added]);
+        setComments((prev) => [...prev, { ...added, user_avatar: authorAvatar || added.user_avatar }]);
       } else {
         setComments((prev) => [...prev, newComment]);
       }
@@ -108,11 +155,53 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
     Alert.alert('Comment Posted', 'Your response has been published!');
   };
 
-  // Render markdown-like sections
+  // Format creation time cleanly
+  const formattedCreationTime = () => {
+    try {
+      const d = new Date(post.created_at);
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return post.created_at;
+    }
+  };
+
+  // Render markdown-like sections, including image markdown `![alt](url)`
   const renderContent = (rawText: string) => {
     const lines = rawText.split('\n');
     return lines.map((line, idx) => {
       const trimmed = line.trim();
+
+      // Image markdown: ![alt](url)
+      const imageMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+      if (imageMatch) {
+        const altText = imageMatch[1];
+        const imageUrl = imageMatch[2];
+        return (
+          <View
+            key={`img-${idx}`}
+            style={[
+              styles.contentImageWrapper,
+              { borderColor: colors.cardBorder, backgroundColor: colors.card },
+            ]}
+          >
+            <Image source={{ uri: imageUrl }} style={styles.contentImage} resizeMode="cover" />
+            {altText ? (
+              <View style={[styles.captionBar, { backgroundColor: colors.surface }]}>
+                <Ionicons name="camera-outline" size={13} color={colors.textMuted} />
+                <Text style={[styles.captionText, { color: colors.textSecondary }]}>
+                  {altText}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        );
+      }
 
       if (trimmed.startsWith('### ')) {
         return (
@@ -194,6 +283,9 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
     });
   };
 
+  const isMagazineStyle = post.cover_style === 'magazine';
+  const isMinimalStyle = post.cover_style === 'minimal';
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Top Floating App Bar */}
@@ -225,13 +317,37 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Cover Image */}
-        <View style={styles.heroContainer}>
+        {/* ============================================================== */}
+        {/* 2. COVER PAGE ADD OPTION RENDERING */}
+        {/* ============================================================== */}
+        <View
+          style={[
+            styles.heroContainer,
+            isMagazineStyle && styles.heroContainerMagazine,
+            isMinimalStyle && styles.heroContainerMinimal,
+          ]}
+        >
           <Image source={{ uri: post.cover_image }} style={styles.heroImage} resizeMode="cover" />
+          {isMagazineStyle && (
+            <View style={styles.magazineHeroOverlay}>
+              <View style={styles.magazineBadgeRow}>
+                <View style={styles.magazinePill}>
+                  <Text style={styles.magazinePillText}>EDITORIAL DISPATCH</Text>
+                </View>
+                <View style={[styles.categoryBadge, { backgroundColor: colors.badgeBg }]}>
+                  <Text style={[styles.categoryText, { color: colors.badgeText }]}>
+                    {post.category}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
 
         <View style={styles.articleContainer}>
-          {/* Category & Read Time */}
+          {/* ============================================================== */}
+          {/* 1. CREATION TIME RENDERING */}
+          {/* ============================================================== */}
           <View style={styles.metaTop}>
             <View style={[styles.categoryBadge, { backgroundColor: colors.badgeBg }]}>
               <Text style={[styles.categoryText, { color: colors.badgeText }]}>
@@ -244,13 +360,13 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
                 {post.read_time}
               </Text>
             </View>
-            <Text style={[styles.dateText, { color: colors.textMuted }]}>
-              {new Date(post.created_at).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              })}
-            </Text>
+            {/* Creation Time display */}
+            <View style={styles.creationTimeBadge}>
+              <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+              <Text style={[styles.dateText, { color: colors.primary, fontWeight: '700' }]}>
+                {formattedCreationTime()}
+              </Text>
+            </View>
           </View>
 
           {/* Title */}
@@ -295,7 +411,7 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
                 styles.followBtn,
                 {
                   backgroundColor: isFollowing ? colors.surface : colors.primary,
-                  borderColor: isFollowing ? colors.cardBorder : colors.primary,
+                  borderColor: isFollowing ? colors.cardBorder : 'transparent',
                 },
               ]}
             >
@@ -310,44 +426,118 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
             </TouchableOpacity>
           </View>
 
-          {/* Audio Listen Preview Bar */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => setIsPlayingAudio(!isPlayingAudio)}
-            style={[
-              styles.audioBar,
-              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
-            ]}
-          >
+          {/* ============================================================== */}
+          {/* 4. AUDIO ADDING OPTION (AUDIO PLAYER) */}
+          {/* ============================================================== */}
+          {(post.audio_url || post.audio_title) && (
             <View
               style={[
-                styles.audioPlayIcon,
-                { backgroundColor: isPlayingAudio ? colors.accent : colors.primary },
+                styles.audioPlayerCard,
+                { backgroundColor: colors.card, borderColor: colors.cardBorder },
               ]}
             >
-              <Ionicons
-                name={isPlayingAudio ? 'pause' : 'play'}
-                size={14}
-                color="#FFFFFF"
-              />
+              <View style={styles.audioTopRow}>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setIsPlayingAudio(!isPlayingAudio)}
+                  style={[
+                    styles.audioMainPlayBtn,
+                    { backgroundColor: isPlayingAudio ? colors.accent : colors.primary },
+                  ]}
+                >
+                  <Ionicons
+                    name={isPlayingAudio ? 'pause' : 'play'}
+                    size={16}
+                    color="#FFFFFF"
+                  />
+                </TouchableOpacity>
+
+                <View style={styles.audioMetaWrap}>
+                  <Text style={[styles.audioTitleText, { color: colors.text }]} numberOfLines={1}>
+                    {post.audio_title || 'Audio Edition: Story Narration'}
+                  </Text>
+                  <Text style={[styles.audioSubText, { color: colors.textMuted }]}>
+                    {isPlayingAudio ? 'Playing...' : 'Tap to listen'} • {post.audio_duration || post.read_time}
+                  </Text>
+                </View>
+
+                {/* Speed toggle */}
+                <TouchableOpacity
+                  onPress={handleToggleSpeed}
+                  style={[styles.audioToolBtn, { backgroundColor: colors.surface }]}
+                >
+                  <Text style={[styles.speedText, { color: colors.primary }]}>
+                    {playbackSpeed}x
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Mute toggle */}
+                <TouchableOpacity
+                  onPress={() => setIsMuted(!isMuted)}
+                  style={[styles.audioToolBtn, { backgroundColor: colors.surface }]}
+                >
+                  <Ionicons
+                    name={isMuted ? 'volume-mute' : 'volume-high'}
+                    size={15}
+                    color={isMuted ? colors.heart : colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Progress Scrubber Bar */}
+              <View style={styles.progressContainer}>
+                <View style={[styles.progressTrack, { backgroundColor: colors.separator }]}>
+                  <View
+                    style={[
+                      styles.progressBarFill,
+                      {
+                        backgroundColor: colors.accent,
+                        width: `${Math.min(100, (playbackSeconds / audioTotalSeconds) * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                <View style={styles.timeCounterRow}>
+                  <Text style={[styles.timeCounterText, { color: colors.textMuted }]}>
+                    {formatSeconds(playbackSeconds)}
+                  </Text>
+                  <Text style={[styles.timeCounterText, { color: colors.textMuted }]}>
+                    {post.audio_duration || formatSeconds(audioTotalSeconds)}
+                  </Text>
+                </View>
+              </View>
             </View>
-            <View style={styles.audioTextWrapper}>
-              <Text style={[styles.audioTitle, { color: colors.text }]}>
-                {isPlayingAudio ? 'Playing Audio Edition...' : 'Listen to this story'}
-              </Text>
-              <Text style={[styles.audioSub, { color: colors.textMuted }]}>
-                {post.read_time} • AI Voice Synthesis Preview
-              </Text>
-            </View>
-            <Ionicons
-              name="volume-high-outline"
-              size={18}
-              color={isPlayingAudio ? colors.accent : colors.textMuted}
-            />
-          </TouchableOpacity>
+          )}
 
           {/* Article Body */}
           <View style={styles.body}>{renderContent(post.content)}</View>
+
+          {/* ============================================================== */}
+          {/* 3. ATTACHED STORY GALLERY RENDERING */}
+          {/* ============================================================== */}
+          {post.images && post.images.length > 0 && (
+            <View style={[styles.gallerySection, { borderTopColor: colors.separator }]}>
+              <View style={styles.galleryHeader}>
+                <Ionicons name="images-outline" size={16} color={colors.primary} />
+                <Text style={[styles.galleryTitle, { color: colors.text }]}>
+                  STORY MEDIA & GALLERY ({post.images.length})
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
+                {post.images.map((imgUrl, i) => (
+                  <View
+                    key={`gal-${i}`}
+                    style={[
+                      styles.galleryCard,
+                      { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                    ]}
+                  >
+                    <Image source={{ uri: imgUrl }} style={styles.galleryImage} resizeMode="cover" />
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Comments Section */}
           <View style={[styles.commentsSection, { borderTopColor: colors.separator }]}>
@@ -510,10 +700,42 @@ const styles = StyleSheet.create({
   heroContainer: {
     width: '100%',
     height: 240,
+    position: 'relative',
+  },
+  heroContainerMagazine: {
+    height: 360,
+  },
+  heroContainerMinimal: {
+    height: 180,
   },
   heroImage: {
     width: '100%',
     height: '100%',
+  },
+  magazineHeroOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  magazineBadgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  magazinePill: {
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  magazinePillText: {
+    color: '#000',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   articleContainer: {
     paddingHorizontal: 20,
@@ -522,6 +744,7 @@ const styles = StyleSheet.create({
   metaTop: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
   },
@@ -542,6 +765,15 @@ const styles = StyleSheet.create({
   readTimeText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+  creationTimeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
   dateText: {
     fontSize: 11,
@@ -594,35 +826,123 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  audioBar: {
+  audioPlayerCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 20,
+  },
+  audioTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    marginBottom: 20,
-    gap: 12,
+    gap: 10,
   },
-  audioPlayIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  audioMainPlayBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  audioTextWrapper: {
+  audioMetaWrap: {
     flex: 1,
   },
-  audioTitle: {
+  audioTitleText: {
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 2,
   },
-  audioSub: {
+  audioSubText: {
     fontSize: 11,
+    marginTop: 2,
+  },
+  audioToolBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  speedText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  progressContainer: {
+    marginTop: 12,
+  },
+  progressTrack: {
+    height: 5,
+    borderRadius: 3,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  timeCounterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
+  timeCounterText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   body: {
     marginTop: 6,
+  },
+  contentImageWrapper: {
+    marginVertical: 14,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  contentImage: {
+    width: '100%',
+    height: 220,
+  },
+  captionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  captionText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  gallerySection: {
+    marginTop: 24,
+    paddingTop: 18,
+    borderTopWidth: 1,
+  },
+  galleryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  galleryTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  galleryScroll: {
+    marginBottom: 8,
+  },
+  galleryCard: {
+    width: 160,
+    height: 110,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginRight: 10,
+    borderWidth: 1,
+  },
+  galleryImage: {
+    width: '100%',
+    height: '100%',
   },
   h2: {
     fontWeight: '800',
@@ -677,6 +997,7 @@ const styles = StyleSheet.create({
     minHeight: 60,
     textAlignVertical: 'top',
     marginBottom: 8,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   submitCommentBtn: {
     alignSelf: 'flex-end',

@@ -1,4 +1,4 @@
-# CHRONICLE Blog App
+# CHRONICLE BLOG APP
 
 A next-generation ("New Model Design") editorial blog application built with **React Native**, **Expo SDK 58**, and connected to **Supabase** cloud PostgreSQL.
 

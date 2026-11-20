@@ -1,4 +1,4 @@
-# ✦ CHRONICLE — Modern React Native Blog App
+# CHRONICLE BLOG APP
 
 A next-generation ("New Model Design") editorial blog application built with **React Native**, **Expo SDK 58**, and connected to **Supabase** cloud PostgreSQL.
 
@@ -30,17 +30,9 @@ A next-generation ("New Model Design") editorial blog application built with **R
   - **Database**: Real-time Supabase connection health check and SQL migration helper
 - **Dark / Light Mode**: System-aware with instant toggle (OLED Obsidian Dark `#0B0D13` and Porcelain White `#F8FAFC`).
 
----
-
-## 🗄️ Supabase Configuration & "Database Links"
-
-The app is pre-configured with your Supabase credentials in `src/services/supabase.ts`:
-- **Project URL**: `https://ftpwzsyajenwjfgoddwy.supabase.co`
-- **Publishable Key**: `sb_publishable_Edi2csDPvelAy-fc-ZsRcQ_PT-S8xXp`
 
 ### Quick 1-Click Database Setup:
 1. Open your Supabase Dashboard:
-   👉 **[https://supabase.com/dashboard/project/ftpwzsyajenwjfgoddwy](https://supabase.com/dashboard/project/ftpwzsyajenwjfgoddwy)**
 2. Click **SQL Editor** on the left navigation bar.
 3. Open the file **`supabase-schema.sql`** in this project directory.
 4. Copy its contents, paste them into the Supabase SQL Editor, and click **Run**.

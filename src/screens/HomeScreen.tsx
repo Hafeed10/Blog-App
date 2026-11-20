@@ -17,7 +17,7 @@ import { Header } from '../components/Header';
 import { CategoryFilter } from '../components/CategoryFilter';
 import { HeroCarousel } from '../components/HeroCarousel';
 import { PostCard } from '../components/PostCard';
-import { DatabaseStatusBanner } from '../components/DatabaseStatusBanner';
+// import { DatabaseStatusBanner } from '../components/DatabaseStatusBanner';
 
 interface HomeScreenProps {
   onSelectPost: (post: Post) => void;
@@ -70,8 +70,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         </View>
       </View>
 
-      {/* Database Setup / Status Banner */}
-      <DatabaseStatusBanner onOpenDatabaseInfo={onOpenDatabaseInfo} />
+      {/* Database Setup / Status Banner - hidden */}
+      {/* <DatabaseStatusBanner onOpenDatabaseInfo={onOpenDatabaseInfo} /> */}
 
       {/* Featured Hero (shown only when not searching) */}
       {!searchQuery && featuredPost && (

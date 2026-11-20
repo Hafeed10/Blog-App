@@ -227,7 +227,7 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Cover Image */}
         <View style={styles.heroContainer}>
-          <Image source={{ uri: post.cover_image }} style={styles.heroImage} />
+          <Image source={{ uri: post.cover_image }} style={styles.heroImage} resizeMode="cover" />
         </View>
 
         <View style={styles.articleContainer}>
@@ -514,7 +514,6 @@ const styles = StyleSheet.create({
   heroImage: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   articleContainer: {
     paddingHorizontal: 20,

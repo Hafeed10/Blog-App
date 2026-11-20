@@ -24,7 +24,7 @@ type Tab = 'home' | 'bookmarks' | 'db';
 
 function MainApp() {
   const { colors, isDark } = useTheme();
-  const { bookmarkedPosts, databaseStatus } = useBlog();
+  const { bookmarkedPosts } = useBlog();
 
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -97,6 +97,15 @@ function MainApp() {
             </Text>
           </TouchableOpacity>
 
+          {/* Center Compose (+) Trigger */}
+          <TouchableOpacity
+            style={[styles.composeButton, { backgroundColor: colors.primary }]}
+            onPress={() => setIsComposeVisible(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+
           {/* Bookmarks Tab */}
           <TouchableOpacity
             style={styles.navItem}
@@ -124,46 +133,6 @@ function MainApp() {
               ]}
             >
               Saved
-            </Text>
-          </TouchableOpacity>
-
-          {/* Center Compose (+) Trigger */}
-          <TouchableOpacity
-            style={[styles.composeButton, { backgroundColor: colors.primary }]}
-            onPress={() => setIsComposeVisible(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          {/* Database Setup Tab */}
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => setActiveTab('db')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconBadgeWrapper}>
-              <Ionicons
-                name={activeTab === 'db' ? 'server' : 'server-outline'}
-                size={22}
-                color={activeTab === 'db' ? colors.primary : colors.textMuted}
-              />
-              <View
-                style={[
-                  styles.dotBadge,
-                  {
-                    backgroundColor: databaseStatus.tableExists ? '#10B981' : '#F59E0B',
-                  },
-                ]}
-              />
-            </View>
-            <Text
-              style={[
-                styles.navLabel,
-                { color: activeTab === 'db' ? colors.primary : colors.textMuted },
-              ]}
-            >
-              Database
             </Text>
           </TouchableOpacity>
         </View>
@@ -248,14 +217,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 9,
     fontWeight: '800',
-  },
-  dotBadge: {
-    position: 'absolute',
-    top: -2,
-    right: -4,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
   },
   composeButton: {
     width: 48,

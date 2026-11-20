@@ -27,7 +27,7 @@ export const HeroCarousel: React.FC<HeroCarouselProps> = ({ post, onPress }) => 
         style={[styles.card, { borderColor: colors.cardBorder }]}
       >
         {/* Cover Image */}
-        <Image source={{ uri: post.cover_image }} style={styles.image} />
+        <Image source={{ uri: post.cover_image }} style={styles.image} resizeMode="cover" />
 
         {/* Gradient Overlay for high readability */}
         <LinearGradient
@@ -114,13 +114,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   image: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   gradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   topRow: {
     flexDirection: 'row',

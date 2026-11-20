@@ -150,7 +150,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
           {/* Cover Image Preview & Presets */}
           <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>COVER IMAGE</Text>
           <View style={[styles.coverPreviewContainer, { borderColor: colors.cardBorder }]}>
-            <Image source={{ uri: coverImage }} style={styles.coverPreview} />
+            <Image source={{ uri: coverImage }} style={styles.coverPreview} resizeMode="cover" />
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetScroll}>
@@ -360,7 +360,6 @@ const styles = StyleSheet.create({
   coverPreview: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   presetScroll: {
     marginBottom: 10,

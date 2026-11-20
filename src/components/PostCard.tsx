@@ -36,7 +36,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post, onPress }) => {
     >
       {/* Cover Image */}
       <View style={styles.imageContainer}>
-        <Image source={{ uri: post.cover_image }} style={styles.image} />
+        <Image source={{ uri: post.cover_image }} style={styles.image} resizeMode="cover" />
         <View style={styles.categoryBadge}>
           <Text style={styles.categoryText}>{post.category}</Text>
         </View>
@@ -141,7 +141,6 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   },
   categoryBadge: {
     position: 'absolute',

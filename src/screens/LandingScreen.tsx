@@ -19,6 +19,7 @@ import { useBlog } from '../context/BlogContext';
 import { useAuth } from '../context/AuthContext';
 import { Post, Category } from '../types/blog';
 import { DEFAULT_AVATAR } from '../types/auth';
+import { BrandLogo } from '../components/BrandLogo';
 
 interface LandingScreenProps {
   onExplore: (category?: Category) => void;
@@ -279,11 +280,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       >
         <View style={styles.topBarInner}>
           <View style={styles.brandRow}>
-            <Image
-              source={require('../../assets/favicon.png')}
-              style={styles.brandLogoImage}
-              resizeMode="contain"
-            />
+            <BrandLogo size={32} />
             <View>
               <Text style={[styles.brandName, { color: colors.text }]}>CHRONICLE</Text>
               <Text style={[styles.brandTagline, { color: colors.textMuted }]}>
@@ -1199,11 +1196,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           <View style={[styles.footerTop, isMobile && styles.footerTopMobile]}>
             <View style={[styles.footerBrand, isMobile && styles.footerBrandMobile]}>
               <View style={styles.brandRow}>
-                <Image
-                  source={require('../../assets/favicon.png')}
-                  style={styles.brandLogoImage}
-                  resizeMode="contain"
-                />
+                <BrandLogo size={32} />
                 <Text style={[styles.brandName, { color: colors.text }]}>CHRONICLE</Text>
               </View>
               <Text style={[styles.footerBio, { color: colors.textSecondary }]}>

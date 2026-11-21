@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useBlog } from '../context/BlogContext';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_AVATAR } from '../types/auth';
+import { BrandLogo } from './BrandLogo';
 
 interface HeaderProps {
   onOpenDatabaseInfo?: () => void;
@@ -33,11 +34,7 @@ export const Header: React.FC<HeaderProps> = ({
         activeOpacity={onPressBrand ? 0.75 : 1}
         disabled={!onPressBrand}
       >
-        <Image
-          source={require('../../assets/favicon.png')}
-          style={styles.logoImage}
-          resizeMode="contain"
-        />
+        <BrandLogo size={32} />
         <View>
           <Text style={[styles.brandTitle, { color: colors.text }]}>CHRONICLE</Text>
           <Text style={[styles.brandSubtitle, { color: colors.textMuted }]}>

@@ -19,6 +19,7 @@ import { useBlog } from '../context/BlogContext';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_AVATAR } from '../types/auth';
 import { Category } from '../types/blog';
+import { CategoryDragDrop } from './CategoryDragDrop';
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -322,9 +323,13 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
                     </View>
                   </View>
                   <View style={styles.authorContactRow}>
-                    <Ionicons name="call" size={11} color={colors.primary} />
+                    <Ionicons
+                      name={user.phoneNumber ? 'call' : 'shield-checkmark'}
+                      size={11}
+                      color={user.isAdmin ? '#EF4444' : colors.primary}
+                    />
                     <Text style={[styles.authorContactText, { color: colors.textMuted }]}>
-                      {user.phoneNumber}
+                      {user.phoneNumber || user.email || 'Administrator'}
                     </Text>
                     <Text style={[styles.dotSep, { color: colors.textMuted }]}>•</Text>
                     <Text style={[styles.authorContactRole, { color: colors.textSecondary }]}>
@@ -939,37 +944,12 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
           {/* GENERAL STORY DETAILS (TITLE, CATEGORY, BODY) */}
           {/* ============================================================== */}
           <View style={[styles.cardSection, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-            {/* Category Selector */}
-            <Text style={[styles.sectionTitle, { color: colors.text, marginBottom: 8 }]}>
-              CATEGORY
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.presetScroll}>
-              {CATEGORIES.map((cat) => {
-                const isSelected = category === cat;
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    onPress={() => setCategory(cat)}
-                    style={[
-                      styles.choiceChip,
-                      {
-                        backgroundColor: isSelected ? colors.primary : colors.surface,
-                        borderColor: isSelected ? 'transparent' : colors.cardBorder,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.choiceChipText,
-                        { color: isSelected ? '#FFF' : colors.textSecondary },
-                      ]}
-                    >
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {/* Interactive Category Selector with Drag & Drop Reordering and Custom Category Option */}
+            <CategoryDragDrop
+              selectedCategory={category}
+              onSelectCategory={(newCat) => setCategory(newCat)}
+              title="CATEGORY"
+            />
 
             {/* Title */}
             <Text style={[styles.inputSubLabel, { color: colors.textSecondary }]}>

@@ -1,22 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Post, Category } from '../types/blog';
+import { Post, Category, DEFAULT_CATEGORIES } from '../types/blog';
 import { INITIAL_POSTS } from '../data/mockPosts';
 import {
   checkDatabaseHealth,
   fetchRemotePosts,
   insertRemotePost,
+  updateRemotePost,
+  deleteRemotePost,
   likeRemotePost,
   DatabaseStatus,
 } from '../services/supabase';
+import { useHistory } from './HistoryContext';
 
 interface BlogContextType {
   posts: Post[];
   featuredPost: Post | null;
   filteredPosts: Post[];
   bookmarkedPosts: Post[];
+  categories: string[];
   selectedCategory: Category;
   setSelectedCategory: (cat: Category) => void;
+  addCustomCategory: (name: string) => Promise<string>;
+  removeCustomCategory: (name: string) => Promise<void>;
+  reorderCategories: (newOrder: string[]) => Promise<void>;
+  resetCategories: () => Promise<void>;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   bookmarkedIds: string[];
@@ -30,7 +38,15 @@ interface BlogContextType {
   refreshPosts: () => Promise<void>;
   createNewPost: (
     post: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string }
-  ) => Promise<{ success: boolean; error?: string }>;
+  ) => Promise<{ success: boolean; error?: string; post?: Post }>;
+  updatePost: (postId: string, updates: Partial<Post>) => Promise<{ success: boolean; error?: string }>;
+  deletePost: (postId: string) => Promise<{ success: boolean; error?: string }>;
+  toggleFeatured: (postId: string) => Promise<void>;
+  duplicatePost: (postId: string) => Promise<{ success: boolean; newPost?: Post; error?: string }>;
+  restoreDefaultPosts: () => Promise<void>;
+  clearAllCache: () => Promise<void>;
+  exportAllData: () => Promise<string>;
+  importPostsData: (imported: Post[]) => Promise<boolean>;
   databaseStatus: DatabaseStatus;
   recheckDatabase: () => Promise<void>;
 }
@@ -39,9 +55,12 @@ const BlogContext = createContext<BlogContextType | null>(null);
 
 const BOOKMARKS_STORAGE_KEY = '@app_blog_bookmarks';
 const LIKES_STORAGE_KEY = '@app_blog_liked_ids';
+const CATEGORIES_STORAGE_KEY = '@app_blog_categories_v2';
 
 export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { addHistoryEvent } = useHistory();
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
+  const [categories, setCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
   const [selectedCategory, setSelectedCategory] = useState<Category>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
@@ -54,21 +73,107 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     rowCount: 0,
   });
 
-  // Load saved bookmarks and likes
+  // Load saved bookmarks, likes, and custom/reordered categories
   useEffect(() => {
     (async () => {
       try {
-        const [savedBookmarks, savedLikes] = await Promise.all([
+        const [savedBookmarks, savedLikes, savedCategories] = await Promise.all([
           AsyncStorage.getItem(BOOKMARKS_STORAGE_KEY),
           AsyncStorage.getItem(LIKES_STORAGE_KEY),
+          AsyncStorage.getItem(CATEGORIES_STORAGE_KEY),
         ]);
         if (savedBookmarks) setBookmarkedIds(JSON.parse(savedBookmarks));
         if (savedLikes) setLikedIds(JSON.parse(savedLikes));
+        if (savedCategories) {
+          const parsed = JSON.parse(savedCategories);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCategories(parsed);
+          }
+        }
       } catch (e) {
         console.warn('Failed to load local storage preferences', e);
       }
     })();
   }, []);
+
+  // Category management functions
+  const addCustomCategory = async (name: string): Promise<string> => {
+    const trimmed = name.trim();
+    if (!trimmed) return '';
+    const existing = categories.find((c) => c.toLowerCase() === trimmed.toLowerCase());
+    if (existing) {
+      setSelectedCategory(existing);
+      return existing;
+    }
+    const updated = [...categories, trimmed];
+    setCategories(updated);
+    setSelectedCategory(trimmed);
+    try {
+      await AsyncStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      await addHistoryEvent({
+        type: 'CATEGORY_ADD',
+        title: 'Category Added',
+        description: `Created new editorial category "${trimmed}".`,
+        actor: 'Admin',
+        level: 'success',
+      });
+    } catch (e) {
+      console.warn('Failed to save categories', e);
+    }
+    return trimmed;
+  };
+
+  const removeCustomCategory = async (name: string) => {
+    const updated = categories.filter((c) => c !== name);
+    setCategories(updated);
+    if (selectedCategory === name) {
+      setSelectedCategory('All');
+    }
+    try {
+      await AsyncStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(updated));
+      await addHistoryEvent({
+        type: 'CATEGORY_DELETE',
+        title: 'Category Deleted',
+        description: `Removed editorial category "${name}".`,
+        actor: 'Admin',
+        level: 'warning',
+      });
+    } catch (e) {
+      console.warn('Failed to save categories', e);
+    }
+  };
+
+  const reorderCategories = async (newOrder: string[]) => {
+    setCategories(newOrder);
+    try {
+      await AsyncStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(newOrder));
+      await addHistoryEvent({
+        type: 'CATEGORY_REORDER',
+        title: 'Categories Reordered',
+        description: `Updated priority order of ${newOrder.length} categories.`,
+        actor: 'Admin',
+        level: 'info',
+      });
+    } catch (e) {
+      console.warn('Failed to save categories order', e);
+    }
+  };
+
+  const resetCategories = async () => {
+    setCategories([...DEFAULT_CATEGORIES]);
+    try {
+      await AsyncStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(DEFAULT_CATEGORIES));
+      await addHistoryEvent({
+        type: 'CATEGORY_RESET',
+        title: 'Categories Reset',
+        description: 'Restored editorial categories to factory defaults.',
+        actor: 'Admin',
+        level: 'info',
+      });
+    } catch (e) {
+      console.warn('Failed to reset categories', e);
+    }
+  };
 
   // Fetch posts from Supabase or fallback to mock
   const loadPosts = useCallback(async (isRefresh = false) => {
@@ -166,7 +271,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Create new post
   const createNewPost = async (
     newPostData: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string }
-  ): Promise<{ success: boolean; error?: string }> => {
+  ): Promise<{ success: boolean; error?: string; post?: Post }> => {
     const optimisticPost: Post = {
       ...newPostData,
       id: `local-${Date.now()}`,
@@ -174,22 +279,250 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
       likes_count: 0,
     };
 
+    let createdPost = optimisticPost;
+    let resSuccess = true;
+    let resError: string | undefined = undefined;
+
     if (databaseStatus.tableExists) {
       const { post: remotePost, error } = await insertRemotePost(newPostData);
       if (error) {
         // Fallback: still show locally so user doesn't lose work
         setPosts((prev) => [optimisticPost, ...prev]);
-        return { success: false, error: error.message };
-      }
-      if (remotePost) {
+        resSuccess = false;
+        resError = error.message;
+      } else if (remotePost) {
+        createdPost = remotePost;
         setPosts((prev) => [remotePost, ...prev]);
-        return { success: true };
+        resSuccess = true;
+      }
+    } else {
+      // Offline / Mock mode addition
+      setPosts((prev) => [optimisticPost, ...prev]);
+    }
+
+    await addHistoryEvent({
+      type: 'POST_CREATE',
+      title: 'Post Published',
+      description: `Created new dispatch "${newPostData.title}".`,
+      actor: newPostData.author_name || 'Admin',
+      level: 'success',
+      targetId: createdPost.id,
+      details: {
+        category: newPostData.category,
+        author: newPostData.author_name,
+        readTime: newPostData.read_time,
+      },
+    });
+
+    return { success: resSuccess, error: resError, post: createdPost };
+  };
+
+  // Update existing post
+  const updatePost = async (
+    postId: string,
+    updates: Partial<Post>
+  ): Promise<{ success: boolean; error?: string }> => {
+    const existing = posts.find((p) => p.id === postId);
+    if (!existing) {
+      return { success: false, error: 'Post not found' };
+    }
+
+    const updatedPost: Post = {
+      ...existing,
+      ...updates,
+      updated_at: new Date().toISOString(),
+    };
+
+    setPosts((prev) => prev.map((p) => (p.id === postId ? updatedPost : p)));
+
+    if (databaseStatus.tableExists) {
+      const { error } = await updateRemotePost(postId, updates);
+      if (error) {
+        console.warn('Supabase remote update failed, kept local changes', error);
       }
     }
 
-    // Offline / Mock mode addition
-    setPosts((prev) => [optimisticPost, ...prev]);
+    await addHistoryEvent({
+      type: 'POST_UPDATE',
+      title: 'Post Updated',
+      description: `Updated dispatch "${updatedPost.title}".`,
+      actor: 'Admin',
+      level: 'info',
+      targetId: postId,
+      details: updates,
+    });
+
     return { success: true };
+  };
+
+  // Delete post
+  const deletePost = async (postId: string): Promise<{ success: boolean; error?: string }> => {
+    const targetPost = posts.find((p) => p.id === postId);
+    const postTitle = targetPost ? targetPost.title : postId;
+
+    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    setBookmarkedIds((prev) => prev.filter((id) => id !== postId));
+    setLikedIds((prev) => prev.filter((id) => id !== postId));
+
+    if (databaseStatus.tableExists) {
+      const { error } = await deleteRemotePost(postId);
+      if (error) {
+        console.warn('Supabase remote deletion failed', error);
+      }
+    }
+
+    await addHistoryEvent({
+      type: 'POST_DELETE',
+      title: 'Post Deleted',
+      description: `Deleted dispatch "${postTitle}".`,
+      actor: 'Admin',
+      level: 'warning',
+      targetId: postId,
+    });
+
+    return { success: true };
+  };
+
+  // Toggle Featured status
+  const toggleFeatured = async (postId: string) => {
+    const target = posts.find((p) => p.id === postId);
+    if (!target) return;
+
+    const nextFeatured = !target.is_featured;
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, is_featured: nextFeatured } : p))
+    );
+
+    if (databaseStatus.tableExists) {
+      await updateRemotePost(postId, { is_featured: nextFeatured });
+    }
+
+    await addHistoryEvent({
+      type: 'POST_FEATURE',
+      title: nextFeatured ? 'Post Featured' : 'Post Unfeatured',
+      description: `Dispatch "${target.title}" marked as ${nextFeatured ? 'Featured Hero Story' : 'Standard'}.`,
+      actor: 'Admin',
+      level: 'info',
+      targetId: postId,
+    });
+  };
+
+  // Duplicate Post
+  const duplicatePost = async (
+    postId: string
+  ): Promise<{ success: boolean; newPost?: Post; error?: string }> => {
+    const original = posts.find((p) => p.id === postId);
+    if (!original) {
+      return { success: false, error: 'Original post not found' };
+    }
+
+    const duplicatedData: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string } = {
+      title: `${original.title} (Copy)`,
+      subtitle: original.subtitle ? `${original.subtitle} (Draft Copy)` : undefined,
+      slug: `${original.slug}-copy-${Date.now()}`,
+      content: original.content,
+      cover_image: original.cover_image,
+      cover_style: original.cover_style,
+      images: original.images ? [...original.images] : [],
+      audio_url: original.audio_url,
+      audio_title: original.audio_title,
+      audio_duration: original.audio_duration,
+      category: original.category,
+      read_time: original.read_time,
+      author_name: original.author_name,
+      author_avatar: original.author_avatar,
+      author_role: original.author_role,
+      author_phone: original.author_phone,
+      is_featured: false,
+      created_at: new Date().toISOString(),
+    };
+
+    const res = await createNewPost(duplicatedData);
+    if (res.success && res.post) {
+      await addHistoryEvent({
+        type: 'POST_DUPLICATE',
+        title: 'Post Duplicated',
+        description: `Created duplicate clone of "${original.title}".`,
+        actor: 'Admin',
+        level: 'info',
+        targetId: res.post.id,
+      });
+      return { success: true, newPost: res.post };
+    }
+    return { success: false, error: res.error || 'Failed to duplicate post' };
+  };
+
+  // Restore Default Mock Posts
+  const restoreDefaultPosts = async () => {
+    setPosts(INITIAL_POSTS);
+    await addHistoryEvent({
+      type: 'SYSTEM_RESTORE',
+      title: 'Default Posts Restored',
+      description: 'Reset story database with curated initial editorial dispatches.',
+      actor: 'Admin',
+      level: 'warning',
+    });
+  };
+
+  // Clear App Cache & Preferences
+  const clearAllCache = async () => {
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(BOOKMARKS_STORAGE_KEY),
+        AsyncStorage.removeItem(LIKES_STORAGE_KEY),
+        AsyncStorage.removeItem(CATEGORIES_STORAGE_KEY),
+      ]);
+      setBookmarkedIds([]);
+      setLikedIds([]);
+      setCategories([...DEFAULT_CATEGORIES]);
+      await addHistoryEvent({
+        type: 'CACHE_CLEAR',
+        title: 'App Cache & Preferences Reset',
+        description: 'Cleared bookmarks, saved likes, and custom categories.',
+        actor: 'Admin',
+        level: 'warning',
+      });
+    } catch (e) {
+      console.warn('Failed to clear cache', e);
+    }
+  };
+
+  // Export full JSON Backup
+  const exportAllData = async (): Promise<string> => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      platform: 'Chronicle Editorial Platform',
+      version: '2.4.0',
+      databaseStatus,
+      postsCount: posts.length,
+      categories,
+      bookmarkedIds,
+      posts,
+    };
+    const json = JSON.stringify(payload, null, 2);
+    await addHistoryEvent({
+      type: 'BACKUP_EXPORT',
+      title: 'Full Platform Backup Exported',
+      description: `Exported JSON payload containing ${posts.length} posts and ${categories.length} categories.`,
+      actor: 'Admin',
+      level: 'info',
+    });
+    return json;
+  };
+
+  // Import Posts Data
+  const importPostsData = async (imported: Post[]): Promise<boolean> => {
+    if (!Array.isArray(imported) || imported.length === 0) return false;
+    setPosts(imported);
+    await addHistoryEvent({
+      type: 'BACKUP_IMPORT',
+      title: 'Posts Imported From Backup',
+      description: `Loaded ${imported.length} dispatches into application memory.`,
+      actor: 'Admin',
+      level: 'success',
+      details: { importedCount: imported.length },
+    });
+    return true;
   };
 
   // Filtered posts calculation
@@ -226,8 +559,13 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
         featuredPost,
         filteredPosts,
         bookmarkedPosts,
+        categories,
         selectedCategory,
         setSelectedCategory,
+        addCustomCategory,
+        removeCustomCategory,
+        reorderCategories,
+        resetCategories,
         searchQuery,
         setSearchQuery,
         bookmarkedIds,
@@ -240,6 +578,14 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isRefreshing,
         refreshPosts,
         createNewPost,
+        updatePost,
+        deletePost,
+        toggleFeatured,
+        duplicatePost,
+        restoreDefaultPosts,
+        clearAllCache,
+        exportAllData,
+        importPostsData,
         databaseStatus,
         recheckDatabase,
       }}

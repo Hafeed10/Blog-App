@@ -56,6 +56,16 @@ From the interactive terminal:
 npm run web
 ```
 
+### 3. Deploy to Vercel:
+The project includes a `vercel.json` configuration for web deployment:
+- **Build Command**: `npx expo export -p web` (or `npm run build`)
+- **Output Directory**: `dist`
+- **Deploy via Vercel CLI**:
+  ```bash
+  npx vercel
+  ```
+- **Deploy via Git**: Import the repository in your Vercel Dashboard, and Vercel will automatically detect the settings from `vercel.json`.
+
 ---
 
 

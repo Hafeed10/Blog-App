@@ -23,11 +23,17 @@ import { PostCard } from '../components/PostCard';
 interface HomeScreenProps {
   onSelectPost: (post: Post) => void;
   onOpenDatabaseInfo: () => void;
+  onGoToLanding?: () => void;
+  onOpenAdmin?: () => void;
+  showAdmin?: boolean;
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({
   onSelectPost,
   onOpenDatabaseInfo,
+  onGoToLanding,
+  onOpenAdmin,
+  showAdmin = false,
 }) => {
   const { colors } = useTheme();
   const {
@@ -42,7 +48,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   const renderHeader = () => (
     <View>
-      <Header onOpenDatabaseInfo={onOpenDatabaseInfo} />
+      <Header
+        onOpenDatabaseInfo={onOpenDatabaseInfo}
+        onPressBrand={onGoToLanding}
+        onOpenAdmin={onOpenAdmin}
+        showAdmin={showAdmin}
+      />
 
       {/* Search Input Bar */}
       <View style={styles.searchContainer}>

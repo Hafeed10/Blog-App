@@ -61,7 +61,30 @@ CREATE POLICY "Allow public insert access for posts"
     ON public.posts FOR INSERT WITH CHECK (true);
 
 CREATE POLICY "Allow public update access for likes"
-    ON public.posts FOR UPDATE USING (true);`;
+    ON public.posts FOR UPDATE USING (true);
+
+-- 4. Optional Extended Columns (Rich media & custom audio)
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS cover_style TEXT DEFAULT 'banner';
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS images TEXT[] DEFAULT '{}';
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS audio_url TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS audio_title TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS audio_duration TEXT;
+ALTER TABLE public.posts ADD COLUMN IF NOT EXISTS author_phone TEXT;
+
+-- 5. Comments Table & Policies
+CREATE TABLE IF NOT EXISTS public.comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
+    user_name TEXT NOT NULL,
+    user_avatar TEXT,
+    content TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access for comments"
+    ON public.comments FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access for comments"
+    ON public.comments FOR INSERT WITH CHECK (true);`;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>

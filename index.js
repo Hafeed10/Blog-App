@@ -3,6 +3,23 @@ import { Platform } from 'react-native';
 
 import App from './App';
 
+// Set document title and update favicon on web
+if (Platform.OS === 'web' && typeof document !== 'undefined') {
+  document.title = 'Chronicle';
+
+  try {
+    let link = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = '/favicon.png?v=' + Date.now();
+  } catch (e) {
+    // Ignore in non-browser environments
+  }
+}
+
 // Global web style reset to fully remove click-time border color, focus ring, and tap highlight
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
   const styleId = 'expo-remove-click-border-style';

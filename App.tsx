@@ -12,18 +12,21 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { HistoryProvider } from './src/context/HistoryContext';
 import { BlogProvider, useBlog } from './src/context/BlogContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PostDetailScreen } from './src/screens/PostDetailScreen';
 import { BookmarksScreen } from './src/screens/BookmarksScreen';
 import { DatabaseSetupScreen } from './src/screens/DatabaseSetupScreen';
+import { LandingScreen } from './src/screens/LandingScreen';
+import { AdminScreen } from './src/screens/AdminScreen';
 import { CreatePostModal } from './src/components/CreatePostModal';
 import { AuthModal } from './src/components/AuthModal';
 import { ProfileModal } from './src/components/ProfileModal';
-import { Post } from './src/types/blog';
+import { Post, Category } from './src/types/blog';
 
-type Tab = 'home' | 'bookmarks' | 'db';
+type Tab = 'landing' | 'home' | 'bookmarks' | 'db' | 'admin';
 
 // Ensure click-time border color and outline are fully removed on web
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
@@ -52,10 +55,10 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
 
 function MainApp() {
   const { colors, isDark } = useTheme();
-  const { bookmarkedPosts } = useBlog();
+  const { bookmarkedPosts, setSelectedCategory } = useBlog();
   const { isLoggedIn, promptLoginForAction } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [activeTab, setActiveTab] = useState<Tab>('landing');
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const [isComposeVisible, setIsComposeVisible] = useState(false);
 
@@ -85,10 +88,28 @@ function MainApp() {
 
       {/* Screen Views */}
       <View style={styles.content}>
+        {activeTab === 'landing' && (
+          <LandingScreen
+            onExplore={(category?: Category) => {
+              if (category) {
+                setSelectedCategory(category);
+              }
+              setActiveTab('home');
+            }}
+            onSelectPost={(post: Post) => setSelectedPost(post)}
+            onCompose={handlePressCompose}
+            onOpenDatabaseInfo={() => setActiveTab('db')}
+            onOpenBookmarks={() => setActiveTab('bookmarks')}
+            onOpenAdmin={() => setActiveTab('admin')}
+          />
+        )}
+
         {activeTab === 'home' && (
           <HomeScreen
             onSelectPost={(post: Post) => setSelectedPost(post)}
             onOpenDatabaseInfo={() => setActiveTab('db')}
+            onGoToLanding={() => setActiveTab('landing')}
+            onOpenAdmin={() => setActiveTab('admin')}
           />
         )}
 
@@ -101,6 +122,14 @@ function MainApp() {
 
         {activeTab === 'db' && (
           <DatabaseSetupScreen onBack={() => setActiveTab('home')} />
+        )}
+
+        {activeTab === 'admin' && (
+          <AdminScreen
+            onNavigateToTab={(tab) => setActiveTab(tab)}
+            onSelectPost={(post: Post) => setSelectedPost(post)}
+            onCompose={handlePressCompose}
+          />
         )}
       </View>
 
@@ -115,7 +144,28 @@ function MainApp() {
             },
           ]}
         >
-          {/* Home Tab */}
+          {/* Discover / Landing Tab */}
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setActiveTab('landing')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={activeTab === 'landing' ? 'sparkles' : 'sparkles-outline'}
+              size={21}
+              color={activeTab === 'landing' ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.navLabel,
+                { color: activeTab === 'landing' ? colors.primary : colors.textMuted },
+              ]}
+            >
+              Discover
+            </Text>
+          </TouchableOpacity>
+
+          {/* Stories / Feed Tab */}
           <TouchableOpacity
             style={styles.navItem}
             onPress={() => setActiveTab('home')}
@@ -123,7 +173,7 @@ function MainApp() {
           >
             <Ionicons
               name={activeTab === 'home' ? 'compass' : 'compass-outline'}
-              size={22}
+              size={21}
               color={activeTab === 'home' ? colors.primary : colors.textMuted}
             />
             <Text
@@ -132,7 +182,7 @@ function MainApp() {
                 { color: activeTab === 'home' ? colors.primary : colors.textMuted },
               ]}
             >
-              Explore
+              Stories
             </Text>
           </TouchableOpacity>
 
@@ -154,7 +204,7 @@ function MainApp() {
             <View style={styles.iconBadgeWrapper}>
               <Ionicons
                 name={activeTab === 'bookmarks' ? 'bookmark' : 'bookmark-outline'}
-                size={22}
+                size={21}
                 color={activeTab === 'bookmarks' ? colors.primary : colors.textMuted}
               />
               {bookmarkedPosts.length > 0 && (
@@ -174,6 +224,30 @@ function MainApp() {
               Saved
             </Text>
           </TouchableOpacity>
+
+          {/* Admin Tab */}
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setActiveTab('admin')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name={activeTab === 'admin' ? 'shield-checkmark' : 'shield-checkmark-outline'}
+              size={21}
+              color={activeTab === 'admin' ? '#EF4444' : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.navLabel,
+                {
+                  color: activeTab === 'admin' ? '#EF4444' : colors.textMuted,
+                  fontWeight: activeTab === 'admin' ? '700' : '500',
+                },
+              ]}
+            >
+              Admin
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -185,7 +259,7 @@ function MainApp() {
 
       {/* Author Auth & Profile Modals */}
       <AuthModal />
-      <ProfileModal />
+      <ProfileModal onOpenAdmin={() => setActiveTab('admin')} />
     </SafeAreaView>
   );
 }
@@ -195,9 +269,11 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthProvider>
-          <BlogProvider>
-            <MainApp />
-          </BlogProvider>
+          <HistoryProvider>
+            <BlogProvider>
+              <MainApp />
+            </BlogProvider>
+          </HistoryProvider>
         </AuthProvider>
       </ThemeProvider>
     </SafeAreaProvider>

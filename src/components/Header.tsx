@@ -9,11 +9,17 @@ import { DEFAULT_AVATAR } from '../types/auth';
 interface HeaderProps {
   onOpenDatabaseInfo?: () => void;
   showDatabaseStatus?: boolean;
+  onPressBrand?: () => void;
+  onOpenAdmin?: () => void;
+  showAdmin?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenDatabaseInfo,
   showDatabaseStatus = false,
+  onPressBrand,
+  onOpenAdmin,
+  showAdmin = false,
 }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const { databaseStatus } = useBlog();
@@ -21,17 +27,24 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <View style={[styles.container, { borderBottomColor: colors.separator }]}>
-      <View style={styles.left}>
-        <View style={[styles.logoIcon, { backgroundColor: colors.primary }]}>
-          <Ionicons name="sparkles" size={16} color="#FFF" />
-        </View>
+      <TouchableOpacity
+        style={styles.left}
+        onPress={onPressBrand}
+        activeOpacity={onPressBrand ? 0.75 : 1}
+        disabled={!onPressBrand}
+      >
+        <Image
+          source={require('../../assets/favicon.png')}
+          style={styles.logoImage}
+          resizeMode="contain"
+        />
         <View>
           <Text style={[styles.brandTitle, { color: colors.text }]}>CHRONICLE</Text>
           <Text style={[styles.brandSubtitle, { color: colors.textMuted }]}>
             NEXT-GEN EDITORIAL
           </Text>
         </View>
-      </View>
+      </TouchableOpacity>
 
       <View style={styles.right}>
         {/* Database Status Pill (hidden by default) */}
@@ -86,6 +99,20 @@ export const Header: React.FC<HeaderProps> = ({
           />
         </TouchableOpacity>
 
+        {/* Admin Console Shortcut (hidden by default) */}
+        {showAdmin && onOpenAdmin && (
+          <TouchableOpacity
+            onPress={onOpenAdmin}
+            style={[
+              styles.iconButton,
+              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+            ]}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="shield-checkmark" size={17} color="#EF4444" />
+          </TouchableOpacity>
+        )}
+
         {/* Profile Avatar / Sign In Button */}
         {isLoggedIn && user ? (
           <TouchableOpacity
@@ -95,9 +122,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Image
               source={{ uri: user.avatarUrl || DEFAULT_AVATAR }}
-              style={[styles.avatar, { borderColor: colors.primary }]}
+              style={[
+                styles.avatar,
+                { borderColor: user.isAdmin ? '#EF4444' : colors.primary },
+              ]}
             />
-            <View style={styles.onlineBadge} />
+            <View
+              style={[
+                styles.onlineBadge,
+                user.isAdmin && { backgroundColor: '#EF4444' },
+              ]}
+            />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -131,6 +166,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
   },
   logoIcon: {
     width: 32,

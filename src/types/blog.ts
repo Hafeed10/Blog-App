@@ -31,4 +31,13 @@ export interface Comment {
   created_at: string;
 }
 
-export type Category = 'All' | 'Tech' | 'Design' | 'AI & Tech' | 'Engineering' | 'Culture' | 'Business';
+export const DEFAULT_CATEGORIES = [
+  'AI & Tech',
+  'Design',
+  'Engineering',
+  'Culture',
+  'Business',
+] as const;
+
+export type DefaultCategory = (typeof DEFAULT_CATEGORIES)[number] | 'All' | 'Tech';
+export type Category = DefaultCategory | (string & {});

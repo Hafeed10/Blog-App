@@ -1,12 +1,19 @@
 export interface UserProfile {
   id: string;
   name: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   countryCode?: string;
   avatarUrl: string;
   role?: string;
   bio?: string;
   createdAt: string;
+  email?: string;
+  isAdmin?: boolean;
+}
+
+export interface AdminLoginCredentials {
+  email: string;
+  password: string;
 }
 
 // Preset avatars fully removed per user request: only adding option allowed

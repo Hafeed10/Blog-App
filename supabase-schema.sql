@@ -83,6 +83,11 @@ CREATE POLICY "Allow public update access for likes"
     FOR UPDATE
     USING (true);
 
+CREATE POLICY "Allow public delete access for posts"
+    ON public.posts
+    FOR DELETE
+    USING (true);
+
 -- 5. RLS Policies for Comments
 CREATE POLICY "Allow public read access for comments"
     ON public.comments
@@ -93,3 +98,8 @@ CREATE POLICY "Allow public insert access for comments"
     ON public.comments
     FOR INSERT
     WITH CHECK (true);
+
+CREATE POLICY "Allow public delete access for comments"
+    ON public.comments
+    FOR DELETE
+    USING (true);

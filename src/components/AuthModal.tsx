@@ -58,10 +58,15 @@ export const AuthModal: React.FC = () => {
     authModalVisible,
     setAuthModalVisible,
     login,
+    adminLogin,
+    authInitialTab,
     authReasonMessage,
     clearPendingAction,
   } = useAuth();
 
+  const [authMode, setAuthMode] = useState<'author' | 'admin'>('author');
+
+  // Author State
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedCountryCode, setSelectedCountryCode] = useState('+1');
@@ -70,6 +75,21 @@ export const AuthModal: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [role, setRole] = useState('Staff Contributor');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Admin State
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [isAdminSubmitting, setIsAdminSubmitting] = useState(false);
+
+  // Sync tab whenever modal becomes visible or authInitialTab changes
+  useEffect(() => {
+    if (authModalVisible) {
+      setAuthMode(authInitialTab || 'author');
+      setAdminError(null);
+    }
+  }, [authModalVisible, authInitialTab]);
 
   const selectedCountry =
     COUNTRY_CODES.find((c) => c.code === selectedCountryCode) || COUNTRY_CODES[0];
@@ -86,6 +106,7 @@ export const AuthModal: React.FC = () => {
   const handleClose = () => {
     clearPendingAction();
     setAuthModalVisible(false);
+    setAdminError(null);
   };
 
   // Only allow numbers for the phone number ("all number add option")
@@ -138,6 +159,45 @@ export const AuthModal: React.FC = () => {
     }
   };
 
+  const handleAdminSubmit = async () => {
+    setAdminError(null);
+    const trimmedEmail = adminEmail.trim();
+
+    if (!trimmedEmail) {
+      setAdminError('Please enter your administrator email address.');
+      return;
+    }
+    if (!adminPassword) {
+      setAdminError('Please enter your administrator password.');
+      return;
+    }
+
+    setIsAdminSubmitting(true);
+    const res = await adminLogin({
+      email: trimmedEmail,
+      password: adminPassword,
+    });
+    setIsAdminSubmitting(false);
+
+    if (res.success) {
+      Alert.alert(
+        'Admin Access Granted',
+        `Welcome back, ${trimmedEmail}! Full administrative console privileges are now active.`
+      );
+      setAdminEmail('');
+      setAdminPassword('');
+      setAdminError(null);
+    } else {
+      setAdminError(res.error || 'Invalid administrator credentials.');
+    }
+  };
+
+  const handleFillDemoAdmin = () => {
+    setAdminEmail('admin@chronicle.com');
+    setAdminPassword('admin123');
+    setAdminError(null);
+  };
+
   return (
     <Modal
       visible={authModalVisible}
@@ -155,12 +215,94 @@ export const AuthModal: React.FC = () => {
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, { color: colors.text }]}>Author Sign In</Text>
+            <Text style={[styles.headerTitle, { color: colors.text }]}>
+              {authMode === 'admin' ? 'Admin Portal' : 'Author Sign In'}
+            </Text>
             <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
-              CHRONICLE MEMBERSHIP
+              {authMode === 'admin' ? 'RESTRICTED EDITORIAL ACCESS' : 'CHRONICLE MEMBERSHIP'}
             </Text>
           </View>
           <View style={{ width: 32 }} />
+        </View>
+
+        {/* Tab Switcher: Author vs Admin Login */}
+        <View
+          style={[
+            styles.tabSwitcher,
+            { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => {
+              setAuthMode('author');
+              setAdminError(null);
+            }}
+            style={[
+              styles.tabBtn,
+              authMode === 'author' && {
+                backgroundColor: colors.card,
+                borderColor: colors.cardBorder,
+                shadowColor: '#000',
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+            ]}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="person-outline"
+              size={16}
+              color={authMode === 'author' ? colors.primary : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.tabBtnText,
+                {
+                  color: authMode === 'author' ? colors.text : colors.textMuted,
+                  fontWeight: authMode === 'author' ? '800' : '600',
+                },
+              ]}
+            >
+              Author Sign In
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => {
+              setAuthMode('admin');
+              setAdminError(null);
+            }}
+            style={[
+              styles.tabBtn,
+              authMode === 'admin' && {
+                backgroundColor: colors.card,
+                borderColor: 'rgba(239, 68, 68, 0.4)',
+                shadowColor: '#000',
+                shadowOpacity: 0.1,
+                shadowRadius: 4,
+                elevation: 2,
+              },
+            ]}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="shield-checkmark"
+              size={16}
+              color={authMode === 'admin' ? '#EF4444' : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.tabBtnText,
+                {
+                  color: authMode === 'admin' ? '#EF4444' : colors.textMuted,
+                  fontWeight: authMode === 'admin' ? '800' : '600',
+                },
+              ]}
+            >
+              Admin Login
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -168,23 +310,231 @@ export const AuthModal: React.FC = () => {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Reason Alert Banner */}
-          {authReasonMessage ? (
-            <View
-              style={[
-                styles.noticeBanner,
-                {
-                  backgroundColor: 'rgba(99, 102, 241, 0.12)',
-                  borderColor: 'rgba(99, 102, 241, 0.3)',
-                },
-              ]}
-            >
-              <Ionicons name="information-circle" size={20} color={colors.primary} />
-              <Text style={[styles.noticeText, { color: colors.text }]}>
-                {authReasonMessage}
+          {authMode === 'admin' ? (
+            /* ========================================================= */
+            /* ADMIN LOGIN (EMAIL & PASSWORD)                            */
+            /* ========================================================= */
+            <View>
+              {/* Admin Card Banner */}
+              <View
+                style={[
+                  styles.adminIntroCard,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: 'rgba(239, 68, 68, 0.3)',
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.adminShieldIconWrap,
+                    { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
+                  ]}
+                >
+                  <Ionicons name="shield-checkmark" size={32} color="#EF4444" />
+                </View>
+                <Text style={[styles.adminIntroTitle, { color: colors.text }]}>
+                  Administrator Login
+                </Text>
+                <Text style={[styles.adminIntroDesc, { color: colors.textMuted }]}>
+                  Enter administrator email and password to access the full editorial console,
+                  moderation tools, and system logs.
+                </Text>
+              </View>
+
+              {/* Error Banner */}
+              {adminError ? (
+                <View
+                  style={[
+                    styles.errorBanner,
+                    {
+                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                      borderColor: 'rgba(239, 68, 68, 0.35)',
+                    },
+                  ]}
+                >
+                  <Ionicons name="alert-circle" size={20} color="#EF4444" />
+                  <Text style={[styles.errorBannerText, { color: '#EF4444' }]}>
+                    {adminError}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Quick Demo Credentials Helper */}
+              <View
+                style={[
+                  styles.demoHelperRow,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.cardBorder,
+                  },
+                ]}
+              >
+                <Ionicons name="key-outline" size={18} color={colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.demoHelperText, { color: colors.text }]}>
+                    Demo Admin: admin@chronicle.com / admin123
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={handleFillDemoAdmin}
+                  style={[styles.demoFillBtn, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.demoFillBtnText}>Fill Demo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Email Address Input */}
+              <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+                ADMIN EMAIL *
               </Text>
+              <View
+                style={[
+                  styles.inputWithIcon,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: adminEmail.trim() ? colors.primary : colors.cardBorder,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="mail-outline"
+                  size={18}
+                  color={adminEmail.trim() ? colors.primary : colors.textMuted}
+                />
+                <TextInput
+                  placeholder="e.g. admin@chronicle.com"
+                  placeholderTextColor={colors.textMuted}
+                  value={adminEmail}
+                  onChangeText={(text) => {
+                    setAdminEmail(text);
+                    if (adminError) setAdminError(null);
+                  }}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={[styles.inputField, { color: colors.text }]}
+                />
+                {adminEmail ? (
+                  <TouchableOpacity onPress={() => setAdminEmail('')}>
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              {/* Password Input */}
+              <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+                ADMIN PASSWORD *
+              </Text>
+              <View
+                style={[
+                  styles.inputWithIcon,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: adminPassword ? colors.primary : colors.cardBorder,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={18}
+                  color={adminPassword ? colors.primary : colors.textMuted}
+                />
+                <TextInput
+                  placeholder="Enter administrator password"
+                  placeholderTextColor={colors.textMuted}
+                  value={adminPassword}
+                  onChangeText={(text) => {
+                    setAdminPassword(text);
+                    if (adminError) setAdminError(null);
+                  }}
+                  secureTextEntry={!showAdminPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={[styles.inputField, { color: colors.text }]}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowAdminPassword((prev) => !prev)}
+                  style={{ padding: 4 }}
+                >
+                  <Ionicons
+                    name={showAdminPassword ? 'eye-off-outline' : 'eye-outline'}
+                    size={20}
+                    color={colors.textMuted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {/* Submit Admin Button */}
+              <TouchableOpacity
+                onPress={handleAdminSubmit}
+                disabled={isAdminSubmitting}
+                style={[styles.submitButton, { backgroundColor: '#EF4444' }]}
+                activeOpacity={0.85}
+              >
+                {isAdminSubmitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <Ionicons name="shield-checkmark" size={20} color="#FFF" />
+                    <Text style={styles.submitButtonText}>Sign In as Administrator</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Admin Privileges Info Box */}
+              <View
+                style={[
+                  styles.adminHighlightsBox,
+                  { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+                ]}
+              >
+                <Text style={[styles.adminHighlightsTitle, { color: colors.textMuted }]}>
+                  PRIVILEGES GRANTED UPON SIGN IN
+                </Text>
+                <View style={styles.adminHighlightItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                  <Text style={[styles.adminHighlightText, { color: colors.text }]}>
+                    Full control to edit, clone, delete, and feature any dispatch
+                  </Text>
+                </View>
+                <View style={styles.adminHighlightItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                  <Text style={[styles.adminHighlightText, { color: colors.text }]}>
+                    Category creation, reordering, and taxonomy resets
+                  </Text>
+                </View>
+                <View style={styles.adminHighlightItem}>
+                  <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                  <Text style={[styles.adminHighlightText, { color: colors.text }]}>
+                    System health diagnostics, audit logs, and JSON backups
+                  </Text>
+                </View>
+              </View>
             </View>
-          ) : null}
+          ) : (
+            /* ========================================================= */
+            /* AUTHOR SIGN IN (NAME & PHONE)                             */
+            /* ========================================================= */
+            <View>
+              {/* Reason Alert Banner */}
+              {authReasonMessage ? (
+                <View
+                  style={[
+                    styles.noticeBanner,
+                    {
+                      backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                      borderColor: 'rgba(99, 102, 241, 0.3)',
+                    },
+                  ]}
+                >
+                  <Ionicons name="information-circle" size={20} color={colors.primary} />
+                  <Text style={[styles.noticeText, { color: colors.text }]}>
+                    {authReasonMessage}
+                  </Text>
+                </View>
+              ) : null}
 
           {/* SECTION 1: PROFILE PICTURE ADD OPTION */}
           <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
@@ -496,7 +846,9 @@ export const AuthModal: React.FC = () => {
               </>
             )}
           </TouchableOpacity>
-        </ScrollView>
+        </View>
+      )}
+    </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -733,5 +1085,117 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3,
+  },
+  tabSwitcher: {
+    flexDirection: 'row',
+    marginHorizontal: 20,
+    marginTop: 14,
+    marginBottom: 4,
+    padding: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    gap: 6,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  tabBtnText: {
+    fontSize: 13,
+  },
+  adminIntroCard: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: 16,
+    marginTop: 4,
+  },
+  adminShieldIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  adminIntroTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  adminIntroDesc: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  demoHelperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 14,
+    gap: 10,
+  },
+  demoHelperText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  demoFillBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  demoFillBtnText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+    marginBottom: 14,
+  },
+  errorBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  adminHighlightsBox: {
+    marginTop: 24,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 10,
+  },
+  adminHighlightsTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  adminHighlightItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  adminHighlightText: {
+    fontSize: 12,
+    lineHeight: 16,
+    flex: 1,
   },
 });

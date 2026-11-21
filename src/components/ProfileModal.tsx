@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Image,
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -17,7 +18,11 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_AVATAR } from '../types/auth';
 
-export const ProfileModal: React.FC = () => {
+interface ProfileModalProps {
+  onOpenAdmin?: () => void;
+}
+
+export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
   const { colors } = useTheme();
   const {
     user,
@@ -25,6 +30,7 @@ export const ProfileModal: React.FC = () => {
     setProfileModalVisible,
     updateProfile,
     logout,
+    openAdminLogin,
   } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -32,11 +38,13 @@ export const ProfileModal: React.FC = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [role, setRole] = useState('');
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (user) {
       setName(user.name);
-      setPhoneNumber(user.phoneNumber);
+      setPhoneNumber(user.phoneNumber || '');
       setAvatarUrl(user.avatarUrl || DEFAULT_AVATAR);
       setRole(user.role || 'Staff Contributor');
     }
@@ -46,6 +54,7 @@ export const ProfileModal: React.FC = () => {
 
   const handleClose = () => {
     setIsEditing(false);
+    setShowLogoutConfirm(false);
     setProfileModalVisible(false);
   };
 
@@ -72,20 +81,17 @@ export const ProfileModal: React.FC = () => {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out of your author profile?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Log Out',
-          style: 'destructive',
-          onPress: async () => {
-            await logout();
-          },
-        },
-      ]
-    );
+    setShowLogoutConfirm(true);
+  };
+
+  const handleConfirmLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+    } finally {
+      setIsLoggingOut(false);
+      setShowLogoutConfirm(false);
+    }
   };
 
   return (
@@ -219,20 +225,37 @@ export const ProfileModal: React.FC = () => {
           ) : (
             /* VIEW DETAILS CARD */
             <View style={styles.detailsList}>
-              <View
-                style={[
-                  styles.infoRow,
-                  { backgroundColor: colors.card, borderColor: colors.cardBorder },
-                ]}
-              >
-                <View style={styles.infoLeft}>
-                  <Ionicons name="call-outline" size={20} color={colors.primary} />
-                  <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Phone</Text>
+              {user.email ? (
+                <View
+                  style={[
+                    styles.infoRow,
+                    { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                  ]}
+                >
+                  <View style={styles.infoLeft}>
+                    <Ionicons name="mail-outline" size={20} color={colors.primary} />
+                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Email</Text>
+                  </View>
+                  <Text style={[styles.infoValue, { color: colors.text }]}>{user.email}</Text>
                 </View>
-                <Text style={[styles.infoValue, { color: colors.text }]}>
-                  {user.phoneNumber || 'Not specified'}
-                </Text>
-              </View>
+              ) : null}
+
+              {user.phoneNumber ? (
+                <View
+                  style={[
+                    styles.infoRow,
+                    { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                  ]}
+                >
+                  <View style={styles.infoLeft}>
+                    <Ionicons name="call-outline" size={20} color={colors.primary} />
+                    <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Phone</Text>
+                  </View>
+                  <Text style={[styles.infoValue, { color: colors.text }]}>
+                    {user.phoneNumber}
+                  </Text>
+                </View>
+              ) : null}
 
               <View
                 style={[
@@ -241,11 +264,20 @@ export const ProfileModal: React.FC = () => {
                 ]}
               >
                 <View style={styles.infoLeft}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
+                  <Ionicons
+                    name={user.isAdmin ? 'shield-checkmark' : 'shield-checkmark-outline'}
+                    size={20}
+                    color={user.isAdmin ? '#EF4444' : colors.primary}
+                  />
                   <Text style={[styles.infoLabel, { color: colors.textMuted }]}>Status</Text>
                 </View>
-                <Text style={[styles.infoValue, { color: '#10B981' }]}>
-                  Verified Author
+                <Text
+                  style={[
+                    styles.infoValue,
+                    { color: user.isAdmin ? '#EF4444' : '#10B981', fontWeight: '700' },
+                  ]}
+                >
+                  {user.isAdmin ? 'System Administrator' : 'Verified Author'}
                 </Text>
               </View>
 
@@ -267,17 +299,114 @@ export const ProfileModal: React.FC = () => {
                 </Text>
               </View>
 
-              {/* Log out button */}
-              <TouchableOpacity
-                onPress={handleLogout}
-                style={[
-                  styles.logoutBtn,
-                  { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' },
-                ]}
-              >
-                <Ionicons name="log-out-outline" size={18} color="#EF4444" />
-                <Text style={styles.logoutBtnText}>Log Out</Text>
-              </TouchableOpacity>
+              {/* Admin Console Shortcut Button */}
+              {onOpenAdmin && (
+                <TouchableOpacity
+                  onPress={() => {
+                    handleClose();
+                    onOpenAdmin();
+                  }}
+                  style={[
+                    styles.adminConsoleBtn,
+                    {
+                      backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                      borderColor: 'rgba(239, 68, 68, 0.35)',
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
+                  <Text style={styles.adminConsoleBtnText}>
+                    {user.isAdmin ? 'Open Admin Console' : 'Admin Console & Full Control'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Switch to Admin (Email & Password) if not already admin */}
+              {!user.isAdmin && (
+                <TouchableOpacity
+                  onPress={() => {
+                    handleClose();
+                    openAdminLogin();
+                  }}
+                  style={[
+                    styles.adminConsoleBtn,
+                    {
+                      backgroundColor: colors.surface,
+                      borderColor: colors.cardBorder,
+                      marginTop: 8,
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="key-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.adminConsoleBtnText, { color: colors.text }]}>
+                    Sign in as Admin (Email & Password)
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Log out section with cross-platform confirmation */}
+              {showLogoutConfirm ? (
+                <View
+                  style={[
+                    styles.logoutConfirmBox,
+                    {
+                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                      borderColor: 'rgba(239, 68, 68, 0.35)',
+                    },
+                  ]}
+                >
+                  <View style={styles.logoutConfirmHeader}>
+                    <Ionicons name="warning" size={20} color="#EF4444" />
+                    <Text style={[styles.logoutConfirmTitle, { color: colors.text }]}>
+                      Confirm Log Out
+                    </Text>
+                  </View>
+                  <Text style={[styles.logoutConfirmSub, { color: colors.textMuted }]}>
+                    Are you sure you want to log out of your author profile? You will need to sign in again to compose stories.
+                  </Text>
+                  <View style={styles.logoutConfirmActions}>
+                    <TouchableOpacity
+                      onPress={() => setShowLogoutConfirm(false)}
+                      style={[
+                        styles.logoutCancelBtn,
+                        { borderColor: colors.cardBorder, backgroundColor: colors.surface },
+                      ]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.logoutCancelBtnText, { color: colors.text }]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleConfirmLogout}
+                      disabled={isLoggingOut}
+                      style={[styles.logoutConfirmBtn, { backgroundColor: '#EF4444' }]}
+                      activeOpacity={0.8}
+                    >
+                      {isLoggingOut ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="log-out" size={16} color="#FFF" />
+                          <Text style={styles.logoutConfirmBtnText}>Yes, Log Out</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  onPress={handleLogout}
+                  style={[
+                    styles.logoutBtn,
+                    { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: 'rgba(239, 68, 68, 0.3)' },
+                  ]}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="log-out-outline" size={18} color="#EF4444" />
+                  <Text style={styles.logoutBtnText}>Log Out</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </ScrollView>
@@ -385,6 +514,57 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  logoutConfirmBox: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    marginTop: 18,
+  },
+  logoutConfirmHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  logoutConfirmTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  logoutConfirmSub: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  logoutConfirmActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  logoutCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  logoutCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  logoutConfirmBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  logoutConfirmBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   editForm: {
     marginTop: 8,
   },
@@ -416,5 +596,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
+  },
+  adminConsoleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  adminConsoleBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });

@@ -56,6 +56,8 @@ const BlogContext = createContext<BlogContextType | null>(null);
 const BOOKMARKS_STORAGE_KEY = '@app_blog_bookmarks';
 const LIKES_STORAGE_KEY = '@app_blog_liked_ids';
 const CATEGORIES_STORAGE_KEY = '@app_blog_categories_v2';
+const POSTS_STORAGE_KEY = '@app_blog_posts_v3';
+const DELETED_POSTS_STORAGE_KEY = '@app_blog_deleted_ids_v3';
 
 export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { addHistoryEvent } = useHistory();
@@ -73,14 +75,16 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     rowCount: 0,
   });
 
-  // Load saved bookmarks, likes, and custom/reordered categories
+  // Load saved bookmarks, likes, custom/reordered categories, and persisted posts
   useEffect(() => {
     (async () => {
       try {
-        const [savedBookmarks, savedLikes, savedCategories] = await Promise.all([
+        const [savedBookmarks, savedLikes, savedCategories, savedPosts, savedDeleted] = await Promise.all([
           AsyncStorage.getItem(BOOKMARKS_STORAGE_KEY),
           AsyncStorage.getItem(LIKES_STORAGE_KEY),
           AsyncStorage.getItem(CATEGORIES_STORAGE_KEY),
+          AsyncStorage.getItem(POSTS_STORAGE_KEY),
+          AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY),
         ]);
         if (savedBookmarks) setBookmarkedIds(JSON.parse(savedBookmarks));
         if (savedLikes) setLikedIds(JSON.parse(savedLikes));
@@ -89,6 +93,17 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (Array.isArray(parsed) && parsed.length > 0) {
             setCategories(parsed);
           }
+        }
+        const deletedIds: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
+        if (savedPosts) {
+          const parsedPosts: Post[] = JSON.parse(savedPosts);
+          if (Array.isArray(parsedPosts) && parsedPosts.length > 0) {
+            setPosts(parsedPosts.filter((p) => !deletedIds.includes(p.id)));
+          } else {
+            setPosts(INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id)));
+          }
+        } else {
+          setPosts(INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id)));
         }
       } catch (e) {
         console.warn('Failed to load local storage preferences', e);
@@ -175,7 +190,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Fetch posts from Supabase or fallback to mock
+  // Fetch posts from Supabase or fallback to mock (respecting deleted and local custom posts)
   const loadPosts = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
       setIsRefreshing(true);
@@ -184,23 +199,54 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      const savedDeletedStr = await AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY).catch(() => null);
+      const deletedIds: string[] = savedDeletedStr ? JSON.parse(savedDeletedStr) : [];
+
       const status = await checkDatabaseHealth();
       setDatabaseStatus(status);
 
       if (status.tableExists) {
         const { posts: remotePosts, error } = await fetchRemotePosts();
         if (!error && remotePosts && remotePosts.length > 0) {
-          setPosts(remotePosts);
+          const validPosts = remotePosts.filter((p) => !deletedIds.includes(p.id));
+          setPosts(validPosts);
+          await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(validPosts));
         } else {
-          // If table exists but empty, show mock or empty
-          setPosts(INITIAL_POSTS);
+          // If table exists but empty, check local storage or fallback to mock
+          const savedPostsStr = await AsyncStorage.getItem(POSTS_STORAGE_KEY).catch(() => null);
+          if (savedPostsStr) {
+            const parsed: Post[] = JSON.parse(savedPostsStr);
+            const valid = parsed.filter((p) => !deletedIds.includes(p.id));
+            setPosts(valid);
+          } else {
+            const initial = INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id));
+            setPosts(initial);
+            await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(initial));
+          }
         }
       } else {
-        // Fallback to rich mock posts
-        setPosts(INITIAL_POSTS);
+        // Fallback to local storage or mock
+        const savedPostsStr = await AsyncStorage.getItem(POSTS_STORAGE_KEY).catch(() => null);
+        if (savedPostsStr) {
+          const parsed: Post[] = JSON.parse(savedPostsStr);
+          const valid = parsed.filter((p) => !deletedIds.includes(p.id));
+          setPosts(valid);
+        } else {
+          const initial = INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id));
+          setPosts(initial);
+          await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(initial));
+        }
       }
     } catch {
-      setPosts(INITIAL_POSTS);
+      const savedDeletedStr = await AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY).catch(() => null);
+      const deletedIds: string[] = savedDeletedStr ? JSON.parse(savedDeletedStr) : [];
+      const savedPostsStr = await AsyncStorage.getItem(POSTS_STORAGE_KEY).catch(() => null);
+      if (savedPostsStr) {
+        const parsed: Post[] = JSON.parse(savedPostsStr);
+        setPosts(parsed.filter((p) => !deletedIds.includes(p.id)));
+      } else {
+        setPosts(INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id)));
+      }
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -250,14 +296,14 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLikedIds(nextLikedIds);
 
     const delta = isCurrentlyLiked ? -1 : 1;
-    setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count + delta) } : p
-      )
+    const nextPosts = posts.map((p) =>
+      p.id === postId ? { ...p, likes_count: Math.max(0, p.likes_count + delta) } : p
     );
+    setPosts(nextPosts);
 
     try {
       await AsyncStorage.setItem(LIKES_STORAGE_KEY, JSON.stringify(nextLikedIds));
+      await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(nextPosts));
       if (!isCurrentlyLiked && databaseStatus.tableExists) {
         await likeRemotePost(postId, post.likes_count);
       }
@@ -287,17 +333,23 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { post: remotePost, error } = await insertRemotePost(newPostData);
       if (error) {
         // Fallback: still show locally so user doesn't lose work
-        setPosts((prev) => [optimisticPost, ...prev]);
+        const nextList = [optimisticPost, ...posts];
+        setPosts(nextList);
+        AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(nextList)).catch(() => {});
         resSuccess = false;
         resError = error.message;
       } else if (remotePost) {
         createdPost = remotePost;
-        setPosts((prev) => [remotePost, ...prev]);
+        const nextList = [remotePost, ...posts];
+        setPosts(nextList);
+        AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(nextList)).catch(() => {});
         resSuccess = true;
       }
     } else {
       // Offline / Mock mode addition
-      setPosts((prev) => [optimisticPost, ...prev]);
+      const nextList = [optimisticPost, ...posts];
+      setPosts(nextList);
+      AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(nextList)).catch(() => {});
     }
 
     await addHistoryEvent({
@@ -333,7 +385,9 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updated_at: new Date().toISOString(),
     };
 
-    setPosts((prev) => prev.map((p) => (p.id === postId ? updatedPost : p)));
+    const nextPosts = posts.map((p) => (p.id === postId ? updatedPost : p));
+    setPosts(nextPosts);
+    AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(nextPosts)).catch(() => {});
 
     if (databaseStatus.tableExists) {
       const { error } = await updateRemotePost(postId, updates);
@@ -360,9 +414,23 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetPost = posts.find((p) => p.id === postId);
     const postTitle = targetPost ? targetPost.title : postId;
 
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
+    const remainingPosts = posts.filter((p) => p.id !== postId);
+    setPosts(remainingPosts);
     setBookmarkedIds((prev) => prev.filter((id) => id !== postId));
     setLikedIds((prev) => prev.filter((id) => id !== postId));
+
+    // Persist deleted state to AsyncStorage so post never reappears
+    try {
+      await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(remainingPosts));
+      const savedDeletedStr = await AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY).catch(() => null);
+      const deletedIds: string[] = savedDeletedStr ? JSON.parse(savedDeletedStr) : [];
+      if (!deletedIds.includes(postId)) {
+        deletedIds.push(postId);
+        await AsyncStorage.setItem(DELETED_POSTS_STORAGE_KEY, JSON.stringify(deletedIds));
+      }
+    } catch (e) {
+      console.warn('Failed to save deleted post to AsyncStorage', e);
+    }
 
     if (databaseStatus.tableExists) {
       const { error } = await deleteRemotePost(postId);
@@ -389,9 +457,9 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!target) return;
 
     const nextFeatured = !target.is_featured;
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, is_featured: nextFeatured } : p))
-    );
+    const nextPosts = posts.map((p) => (p.id === postId ? { ...p, is_featured: nextFeatured } : p));
+    setPosts(nextPosts);
+    AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(nextPosts)).catch(() => {});
 
     if (databaseStatus.tableExists) {
       await updateRemotePost(postId, { is_featured: nextFeatured });
@@ -455,6 +523,12 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Restore Default Mock Posts
   const restoreDefaultPosts = async () => {
     setPosts(INITIAL_POSTS);
+    try {
+      await AsyncStorage.removeItem(DELETED_POSTS_STORAGE_KEY);
+      await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(INITIAL_POSTS));
+    } catch (e) {
+      console.warn('Failed to reset posts storage', e);
+    }
     await addHistoryEvent({
       type: 'SYSTEM_RESTORE',
       title: 'Default Posts Restored',

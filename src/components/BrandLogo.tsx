@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, StyleProp, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet, StyleProp, ViewStyle, Image, ImageSourcePropType } from 'react-native';
 
 interface BrandLogoProps {
   size?: number;
   style?: StyleProp<ViewStyle>;
+  borderRadius?: number;
+  source?: ImageSourcePropType;
   iconColor?: string;
   backgroundColor?: string;
 }
@@ -12,11 +13,10 @@ interface BrandLogoProps {
 export const BrandLogo: React.FC<BrandLogoProps> = ({
   size = 32,
   style,
-  iconColor = '#2563EB',
-  backgroundColor = '#FFFFFF',
+  borderRadius,
+  source = require('../../assets/brand-logo.png'),
 }) => {
-  const borderRadius = Math.round(size * 0.28);
-  const iconSize = Math.round(size * 0.62);
+  const radius = borderRadius ?? Math.round(size * 0.25);
 
   return (
     <View
@@ -25,19 +25,20 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         {
           width: size,
           height: size,
-          borderRadius,
-          backgroundColor,
-          borderColor: 'rgba(37, 99, 235, 0.22)',
-          shadowColor: '#2563EB',
-          shadowOffset: { width: 0, height: 1.5 },
-          shadowOpacity: 0.15,
-          shadowRadius: 3,
-          elevation: 2,
+          borderRadius: radius,
         },
         style,
       ]}
     >
-      <Ionicons name="chevron-up" size={iconSize} color={iconColor} />
+      <Image
+        source={source}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: radius,
+        }}
+        resizeMode="contain"
+      />
     </View>
   );
 };
@@ -46,7 +47,6 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
   },
 });
 

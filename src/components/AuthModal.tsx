@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_AVATAR } from '../types/auth';
+import { pickImageFromLibrary, takePhotoWithCamera } from '../services/imagePickerService';
 
 const COUNTRY_CODES = [
   { code: '+1', country: 'United States / Canada', flag: '🇺🇸' },
@@ -75,6 +76,31 @@ export const AuthModal: React.FC = () => {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [role, setRole] = useState('Staff Contributor');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPickingImage, setIsPickingImage] = useState(false);
+
+  const handlePickFromGallery = async () => {
+    setIsPickingImage(true);
+    try {
+      const uri = await pickImageFromLibrary({ aspect: [1, 1], quality: 0.8 });
+      if (uri) {
+        setAvatarUrl(uri);
+      }
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setIsPickingImage(true);
+    try {
+      const uri = await takePhotoWithCamera({ aspect: [1, 1], quality: 0.8 });
+      if (uri) {
+        setAvatarUrl(uri);
+      }
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
 
   // Admin State
   const [adminEmail, setAdminEmail] = useState('');
@@ -541,13 +567,21 @@ export const AuthModal: React.FC = () => {
             1. PROFILE PICTURE
           </Text>
 
+          {/* SECTION 1: PROFILE PICTURE ADD OPTION */}
+          <Text style={[styles.sectionHeading, { color: colors.textSecondary }]}>
+            1. PROFILE PICTURE
+          </Text>
+
           {/* Large Avatar Preview with Live Update */}
           <View style={styles.avatarPreviewSection}>
-            <View
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handlePickFromGallery}
               style={[
                 styles.avatarGlowWrapper,
                 { borderColor: avatarUrl.trim() ? colors.primary : colors.cardBorder },
               ]}
+              accessibilityLabel="Upload or change profile picture"
             >
               {avatarUrl.trim() ? (
                 <Image
@@ -556,12 +590,19 @@ export const AuthModal: React.FC = () => {
                 />
               ) : (
                 <View style={[styles.avatarPlaceholder, { backgroundColor: colors.card }]}>
-                  <Ionicons name="person-outline" size={36} color={colors.textMuted} />
+                  {isPickingImage ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Ionicons name="person-outline" size={36} color={colors.textMuted} />
+                  )}
                 </View>
               )}
               {avatarUrl.trim() ? (
                 <TouchableOpacity
-                  onPress={() => setAvatarUrl('')}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    setAvatarUrl('');
+                  }}
                   style={[styles.actionBadge, { backgroundColor: '#EF4444' }]}
                   activeOpacity={0.8}
                   accessibilityLabel="Remove photo"
@@ -570,23 +611,63 @@ export const AuthModal: React.FC = () => {
                 </TouchableOpacity>
               ) : (
                 <View style={[styles.actionBadge, { backgroundColor: colors.primary }]}>
-                  <Ionicons name="add" size={14} color="#FFF" />
+                  <Ionicons name="camera" size={12} color="#FFF" />
                 </View>
               )}
-            </View>
+            </TouchableOpacity>
+
             <View style={styles.avatarInfoCol}>
               <Text style={[styles.avatarInfoTitle, { color: colors.text }]}>
                 {avatarUrl.trim() ? 'Photo Added' : 'Add Profile Picture'}
               </Text>
               <Text style={[styles.avatarInfoSub, { color: colors.textMuted }]}>
                 {avatarUrl.trim()
-                  ? 'Paste another URL to replace, or tap X to clear'
-                  : 'Paste an image URL below to set your author avatar (optional)'}
+                  ? 'Tap avatar or buttons below to change, or tap X to clear'
+                  : 'Upload an image from your device, take photo, or paste a URL below'}
               </Text>
+
+              {/* Upload Action Buttons */}
+              <View style={styles.avatarUploadButtonsRow}>
+                <TouchableOpacity
+                  onPress={handlePickFromGallery}
+                  disabled={isPickingImage}
+                  style={[styles.avatarUploadBtn, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.8}
+                >
+                  {isPickingImage ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={15} color="#FFF" />
+                      <Text style={styles.avatarUploadBtnText}>Upload Photo</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleTakePhoto}
+                  disabled={isPickingImage}
+                  style={[
+                    styles.avatarCameraBtn,
+                    { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="camera-outline" size={15} color={colors.text} />
+                  <Text style={[styles.avatarCameraBtnText, { color: colors.text }]}>Take Photo</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
 
-          {/* Add Photo URL Input - ONLY adding option, all extra option images removed */}
+          {/* Divider with "or paste URL" */}
+          <View style={styles.orDividerRow}>
+            <View style={[styles.orDividerLine, { backgroundColor: colors.cardBorder }]} />
+            <Text style={[styles.orDividerText, { color: colors.textMuted }]}>OR PASTE IMAGE URL</Text>
+            <View style={[styles.orDividerLine, { backgroundColor: colors.cardBorder }]} />
+          </View>
+
+          {/* Add Photo URL Input */}
           <View style={styles.customUrlContainer}>
             <View
               style={[
@@ -598,7 +679,7 @@ export const AuthModal: React.FC = () => {
               ]}
             >
               <Ionicons
-                name="image-outline"
+                name="link-outline"
                 size={18}
                 color={avatarUrl.trim() ? colors.primary : colors.textMuted}
               />
@@ -958,6 +1039,54 @@ const styles = StyleSheet.create({
   avatarInfoSub: {
     fontSize: 12,
     lineHeight: 16,
+  },
+  avatarUploadButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    flexWrap: 'wrap',
+  },
+  avatarUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9,
+  },
+  avatarUploadBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  avatarCameraBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  avatarCameraBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  orDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 10,
+  },
+  orDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  orDividerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   customUrlContainer: {
     marginBottom: 6,

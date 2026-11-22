@@ -22,9 +22,10 @@ import { useHistory } from '../context/HistoryContext';
 import { Post, Category } from '../types/blog';
 import { HistoryEvent, HistoryEventType, HistoryEventLevel } from '../types/history';
 import { CategoryDragDrop } from '../components/CategoryDragDrop';
+import { pickImageFromLibrary } from '../services/imagePickerService';
 
 interface AdminScreenProps {
-  onNavigateToTab?: (tab: 'landing' | 'home' | 'bookmarks' | 'db' | 'admin') => void;
+  onNavigateToTab?: (tab: 'landing' | 'home' | 'bookmarks' | 'db' | 'admin' | 'settings') => void;
   onSelectPost?: (post: Post) => void;
   onCompose?: () => void;
 }
@@ -2207,9 +2208,29 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
                   </View>
                 ) : null}
 
-                <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                  Cover Image URL
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, marginBottom: 4 }}>
+                  <Text style={[styles.inputLabel, { color: colors.textSecondary, marginBottom: 0 }]}>
+                    Cover Image URL
+                  </Text>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      const uri = await pickImageFromLibrary({ aspect: [16, 9], quality: 0.8 });
+                      if (uri) setEditCoverImage(uri);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                      backgroundColor: colors.primary,
+                    }}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={13} color="#FFF" />
+                    <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '700' }}>Upload Photo</Text>
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   value={editCoverImage}
                   onChangeText={setEditCoverImage}

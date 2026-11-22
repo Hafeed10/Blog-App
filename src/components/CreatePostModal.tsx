@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { DEFAULT_AVATAR } from '../types/auth';
 import { Category } from '../types/blog';
 import { CategoryDragDrop } from './CategoryDragDrop';
+import { pickImageFromLibrary, takePhotoWithCamera } from '../services/imagePickerService';
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -116,6 +117,46 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
   const [previewAudioPlaying, setPreviewAudioPlaying] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPickingCover, setIsPickingCover] = useState(false);
+  const [isPickingInline, setIsPickingInline] = useState(false);
+
+  const handlePickCoverImage = async () => {
+    setIsPickingCover(true);
+    try {
+      const uri = await pickImageFromLibrary({ aspect: [16, 9], quality: 0.8 });
+      if (uri) {
+        setCoverImage(uri);
+        Alert.alert('Cover Set', 'Your cover image has been updated!');
+      }
+    } finally {
+      setIsPickingCover(false);
+    }
+  };
+
+  const handleTakeCoverPhoto = async () => {
+    setIsPickingCover(true);
+    try {
+      const uri = await takePhotoWithCamera({ aspect: [16, 9], quality: 0.8 });
+      if (uri) {
+        setCoverImage(uri);
+        Alert.alert('Cover Set', 'Your cover photo has been captured and set!');
+      }
+    } finally {
+      setIsPickingCover(false);
+    }
+  };
+
+  const handlePickInlineImage = async () => {
+    setIsPickingInline(true);
+    try {
+      const uri = await pickImageFromLibrary({ quality: 0.8 });
+      if (uri) {
+        setInlineImageUrl(uri);
+      }
+    } finally {
+      setIsPickingInline(false);
+    }
+  };
 
   // Compute final ISO creation time
   const getSelectedCreatedAt = (): string => {
@@ -505,7 +546,11 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
             </View>
 
             {/* Visual Cover Preview */}
-            <View style={[styles.coverPreviewContainer, { borderColor: colors.cardBorder }]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handlePickCoverImage}
+              style={[styles.coverPreviewContainer, { borderColor: colors.cardBorder }]}
+            >
               <Image source={{ uri: coverImage }} style={styles.coverPreview} resizeMode="cover" />
               <View style={styles.coverOverlay}>
                 <View style={styles.coverOverlayPills}>
@@ -527,7 +572,7 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
                   {title || 'Story Title Preview'}
                 </Text>
               </View>
-            </View>
+            </TouchableOpacity>
 
             {/* Cover Layout Style Selector */}
             <Text style={[styles.inputSubLabel, { color: colors.textSecondary }]}>
@@ -595,10 +640,47 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
               </TouchableOpacity>
             </View>
 
-            {/* Cover Image Add Option (Only adding option, extra option images removed) */}
+            {/* Cover Image Add Option */}
             <View style={styles.customCoverUrlWrap}>
               <Text style={[styles.inputSubLabel, { color: colors.textSecondary }]}>
-                ADD COVER PAGE IMAGE (PASTE WEB URL)
+                ADD COVER PAGE IMAGE
+              </Text>
+
+              {/* Quick Upload Buttons */}
+              <View style={styles.coverUploadButtonsRow}>
+                <TouchableOpacity
+                  onPress={handlePickCoverImage}
+                  disabled={isPickingCover}
+                  style={[styles.coverUploadActionBtn, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.8}
+                >
+                  {isPickingCover ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={15} color="#FFF" />
+                      <Text style={styles.coverUploadActionBtnText}>Upload Cover Image</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleTakeCoverPhoto}
+                  disabled={isPickingCover}
+                  style={[
+                    styles.coverCameraActionBtn,
+                    { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="camera-outline" size={15} color={colors.text} />
+                  <Text style={[styles.coverCameraActionBtnText, { color: colors.text }]}>Take Photo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Or Paste Web URL */}
+              <Text style={[styles.inputSubLabel, { color: colors.textSecondary, marginTop: 10 }]}>
+                OR PASTE WEB URL
               </Text>
               <View style={styles.inputWithAction}>
                 <TextInput
@@ -670,9 +752,26 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
                   Insert Image into Story Markdown
                 </Text>
 
+                {/* Upload Button */}
+                <TouchableOpacity
+                  onPress={handlePickInlineImage}
+                  disabled={isPickingInline}
+                  style={[styles.inlineUploadBtn, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.8}
+                >
+                  {isPickingInline ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={16} color="#FFF" />
+                      <Text style={styles.inlineUploadBtnText}>Upload Image from Device</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
                 {/* Custom Image URL & Caption */}
-                <Text style={[styles.inputSubLabel, { color: colors.textSecondary }]}>
-                  IMAGE URL
+                <Text style={[styles.inputSubLabel, { color: colors.textSecondary, marginTop: 10 }]}>
+                  OR ENTER IMAGE URL
                 </Text>
                 <TextInput
                   placeholder="https://images.unsplash.com/photo-..."
@@ -1331,6 +1430,55 @@ const styles = StyleSheet.create({
   },
   customCoverUrlWrap: {
     marginTop: 4,
+  },
+  coverUploadButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  coverUploadActionBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  coverUploadActionBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  coverCameraActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  coverCameraActionBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  inlineUploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  inlineUploadBtnText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   toggleToolBtn: {
     flexDirection: 'row',

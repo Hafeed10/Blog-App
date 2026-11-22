@@ -19,6 +19,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you set your profile picture and story images.",
+          "cameraPermission": "The app accesses your camera to let you take photos for your profile and stories."
+        }
+      ]
+    ]
   }
 }

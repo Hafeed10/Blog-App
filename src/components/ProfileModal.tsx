@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_AVATAR } from '../types/auth';
+import { pickImageFromLibrary, takePhotoWithCamera } from '../services/imagePickerService';
 
 interface ProfileModalProps {
   onOpenAdmin?: () => void;
@@ -40,6 +41,31 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
   const [role, setRole] = useState('');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isPickingImage, setIsPickingImage] = useState(false);
+
+  const handlePickFromGallery = async () => {
+    setIsPickingImage(true);
+    try {
+      const uri = await pickImageFromLibrary({ aspect: [1, 1], quality: 0.8 });
+      if (uri) {
+        setAvatarUrl(uri);
+      }
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
+
+  const handleTakePhoto = async () => {
+    setIsPickingImage(true);
+    try {
+      const uri = await takePhotoWithCamera({ aspect: [1, 1], quality: 0.8 });
+      if (uri) {
+        setAvatarUrl(uri);
+      }
+    } finally {
+      setIsPickingImage(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -124,14 +150,24 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
         <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
           {/* Avatar & Hero */}
           <View style={styles.avatarSection}>
-            <View style={[styles.avatarBorder, { borderColor: colors.primary }]}>
+            <TouchableOpacity
+              disabled={!isEditing}
+              onPress={handlePickFromGallery}
+              activeOpacity={isEditing ? 0.8 : 1}
+              style={[styles.avatarBorder, { borderColor: colors.primary }]}
+            >
               <Image
                 source={{
                   uri: avatarUrl || user.avatarUrl || DEFAULT_AVATAR,
                 }}
                 style={styles.avatar}
               />
-            </View>
+              {isEditing ? (
+                <View style={[styles.avatarEditBadge, { backgroundColor: colors.primary }]}>
+                  <Ionicons name="camera" size={13} color="#FFF" />
+                </View>
+              ) : null}
+            </TouchableOpacity>
             <Text style={[styles.userName, { color: colors.text }]}>{user.name}</Text>
             <Text style={[styles.userRole, { color: colors.textMuted }]}>{user.role || 'Author'}</Text>
           </View>
@@ -143,7 +179,46 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
                 CHANGE PROFILE PICTURE
               </Text>
 
-              {/* Add Photo URL Input - ONLY adding option */}
+              {/* Upload buttons row */}
+              <View style={styles.uploadButtonsRow}>
+                <TouchableOpacity
+                  onPress={handlePickFromGallery}
+                  disabled={isPickingImage}
+                  style={[styles.uploadActionBtn, { backgroundColor: colors.primary }]}
+                  activeOpacity={0.8}
+                >
+                  {isPickingImage ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="cloud-upload-outline" size={16} color="#FFF" />
+                      <Text style={styles.uploadActionBtnText}>Upload Photo</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleTakePhoto}
+                  disabled={isPickingImage}
+                  style={[
+                    styles.cameraActionBtn,
+                    { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="camera-outline" size={16} color={colors.text} />
+                  <Text style={[styles.cameraActionBtnText, { color: colors.text }]}>Take Photo</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Divider */}
+              <View style={styles.orDividerRow}>
+                <View style={[styles.orDividerLine, { backgroundColor: colors.cardBorder }]} />
+                <Text style={[styles.orDividerText, { color: colors.textMuted }]}>OR PASTE IMAGE URL</Text>
+                <View style={[styles.orDividerLine, { backgroundColor: colors.cardBorder }]} />
+              </View>
+
+              {/* Add Photo URL Input */}
               <View
                 style={[
                   styles.inputWithIcon,
@@ -153,7 +228,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
                   },
                 ]}
               >
-                <Ionicons name="image-outline" size={18} color={avatarUrl ? colors.primary : colors.textMuted} />
+                <Ionicons name="link-outline" size={18} color={avatarUrl ? colors.primary : colors.textMuted} />
                 <TextInput
                   placeholder="Paste profile photo URL (https://...)"
                   placeholderTextColor={colors.textMuted}
@@ -299,8 +374,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
                 </Text>
               </View>
 
-              {/* Admin Console Shortcut Button */}
-              {onOpenAdmin && (
+              {/* Admin Console Shortcut Button (Only for authenticated Admins) */}
+              {onOpenAdmin && user.isAdmin && (
                 <TouchableOpacity
                   onPress={() => {
                     handleClose();
@@ -317,7 +392,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ onOpenAdmin }) => {
                 >
                   <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
                   <Text style={styles.adminConsoleBtnText}>
-                    {user.isAdmin ? 'Open Admin Console' : 'Admin Console & Full Control'}
+                    Open Admin Console
                   </Text>
                 </TouchableOpacity>
               )}
@@ -459,6 +534,68 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     padding: 3,
     marginBottom: 12,
+    position: 'relative',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  uploadButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  uploadActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 12,
+  },
+  uploadActionBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  cameraActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  cameraActionBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  orDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 10,
+  },
+  orDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  orDividerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   avatar: {
     width: '100%',

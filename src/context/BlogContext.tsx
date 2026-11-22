@@ -12,6 +12,7 @@ import {
   DatabaseStatus,
 } from '../services/supabase';
 import { useHistory } from './HistoryContext';
+import { safeJsonParse, sanitizeText } from '../utils/security';
 
 interface BlogContextType {
   posts: Post[];
@@ -86,17 +87,17 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
           AsyncStorage.getItem(POSTS_STORAGE_KEY),
           AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY),
         ]);
-        if (savedBookmarks) setBookmarkedIds(JSON.parse(savedBookmarks));
-        if (savedLikes) setLikedIds(JSON.parse(savedLikes));
+        if (savedBookmarks) setBookmarkedIds(safeJsonParse<string[]>(savedBookmarks, []));
+        if (savedLikes) setLikedIds(safeJsonParse<string[]>(savedLikes, []));
         if (savedCategories) {
-          const parsed = JSON.parse(savedCategories);
+          const parsed = safeJsonParse<string[]>(savedCategories, []);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            setCategories(parsed);
+            setCategories(parsed.map((c) => sanitizeText(c, 50)).filter(Boolean));
           }
         }
-        const deletedIds: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
+        const deletedIds: string[] = savedDeleted ? safeJsonParse<string[]>(savedDeleted, []) : [];
         if (savedPosts) {
-          const parsedPosts: Post[] = JSON.parse(savedPosts);
+          const parsedPosts: Post[] = safeJsonParse<Post[]>(savedPosts, []);
           if (Array.isArray(parsedPosts) && parsedPosts.length > 0) {
             setPosts(parsedPosts.filter((p) => !deletedIds.includes(p.id)));
           } else {
@@ -113,7 +114,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Category management functions
   const addCustomCategory = async (name: string): Promise<string> => {
-    const trimmed = name.trim();
+    const trimmed = sanitizeText(name, 50).trim();
     if (!trimmed) return '';
     const existing = categories.find((c) => c.toLowerCase() === trimmed.toLowerCase());
     if (existing) {
@@ -200,7 +201,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const savedDeletedStr = await AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY).catch(() => null);
-      const deletedIds: string[] = savedDeletedStr ? JSON.parse(savedDeletedStr) : [];
+      const deletedIds: string[] = savedDeletedStr ? safeJsonParse<string[]>(savedDeletedStr, []) : [];
 
       const status = await checkDatabaseHealth();
       setDatabaseStatus(status);
@@ -215,7 +216,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // If table exists but empty, check local storage or fallback to mock
           const savedPostsStr = await AsyncStorage.getItem(POSTS_STORAGE_KEY).catch(() => null);
           if (savedPostsStr) {
-            const parsed: Post[] = JSON.parse(savedPostsStr);
+            const parsed: Post[] = safeJsonParse<Post[]>(savedPostsStr, []);
             const valid = parsed.filter((p) => !deletedIds.includes(p.id));
             setPosts(valid);
           } else {
@@ -228,7 +229,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Fallback to local storage or mock
         const savedPostsStr = await AsyncStorage.getItem(POSTS_STORAGE_KEY).catch(() => null);
         if (savedPostsStr) {
-          const parsed: Post[] = JSON.parse(savedPostsStr);
+          const parsed: Post[] = safeJsonParse<Post[]>(savedPostsStr, []);
           const valid = parsed.filter((p) => !deletedIds.includes(p.id));
           setPosts(valid);
         } else {
@@ -239,10 +240,10 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch {
       const savedDeletedStr = await AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY).catch(() => null);
-      const deletedIds: string[] = savedDeletedStr ? JSON.parse(savedDeletedStr) : [];
+      const deletedIds: string[] = savedDeletedStr ? safeJsonParse<string[]>(savedDeletedStr, []) : [];
       const savedPostsStr = await AsyncStorage.getItem(POSTS_STORAGE_KEY).catch(() => null);
       if (savedPostsStr) {
-        const parsed: Post[] = JSON.parse(savedPostsStr);
+        const parsed: Post[] = safeJsonParse<Post[]>(savedPostsStr, []);
         setPosts(parsed.filter((p) => !deletedIds.includes(p.id)));
       } else {
         setPosts(INITIAL_POSTS.filter((p) => !deletedIds.includes(p.id)));
@@ -423,7 +424,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await AsyncStorage.setItem(POSTS_STORAGE_KEY, JSON.stringify(remainingPosts));
       const savedDeletedStr = await AsyncStorage.getItem(DELETED_POSTS_STORAGE_KEY).catch(() => null);
-      const deletedIds: string[] = savedDeletedStr ? JSON.parse(savedDeletedStr) : [];
+      const deletedIds: string[] = savedDeletedStr ? safeJsonParse<string[]>(savedDeletedStr, []) : [];
       if (!deletedIds.includes(postId)) {
         deletedIds.push(postId);
         await AsyncStorage.setItem(DELETED_POSTS_STORAGE_KEY, JSON.stringify(deletedIds));

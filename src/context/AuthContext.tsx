@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProfile, DEFAULT_AVATAR, AdminLoginCredentials } from '../types/auth';
 import { supabase } from '../services/supabase';
+import { authRateLimiter, sanitizeText, safeJsonParse } from '../utils/security';
 
 interface AuthContextType {
   user: UserProfile | null;
@@ -51,8 +52,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const stored = await AsyncStorage.getItem(USER_STORAGE_KEY);
         if (stored) {
-          const parsed = JSON.parse(stored);
-          setUser(parsed);
+          const parsed = safeJsonParse<UserProfile | null>(stored, null);
+          if (parsed && typeof parsed === 'object') {
+            setUser(parsed);
+          }
         }
       } catch (err) {
         console.warn('Failed to load user profile from storage', err);
@@ -104,32 +107,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const adminLogin = async (credentials: AdminLoginCredentials): Promise<{ success: boolean; error?: string }> => {
     try {
-      const email = credentials.email.trim().toLowerCase();
-      const password = credentials.password;
+      const email = sanitizeText(credentials.email, 150).trim().toLowerCase();
+      const password = credentials.password || '';
 
       if (!email) {
         return { success: false, error: 'Please enter your administrator email.' };
       }
-      if (!/\S+@\S+\.\S+/.test(email)) {
-        return { success: false, error: 'Please enter a valid email address (e.g. admin@chronicle.com).' };
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return { success: false, error: 'Please enter a valid administrator email address (e.g. admin@chronicle.com).' };
       }
-      if (!password || password.length < 4) {
-        return { success: false, error: 'Password must be at least 4 characters.' };
+      if (!password || password.length < 6) {
+        return { success: false, error: 'Password must be at least 6 characters.' };
       }
 
-      // Check if this matches built-in / demo admin credentials first to avoid
-      // sending invalid credentials to Supabase and triggering a 400 Bad Request console error
-      const isDemoAdmin =
-        (email === 'admin@chronicle.com' && (password === 'admin123' || password === 'admin')) ||
-        (email === 'admin@admin.com' && (password === 'admin123' || password === 'admin')) ||
-        (email.includes('admin') && (password === 'admin123' || password === 'admin')) ||
-        password === 'admin123';
+      // Brute Force & Rate Limit Protection (max 5 failed attempts per 5 minutes)
+      const rateLimitKey = `admin_auth_${email}`;
+      const rateCheck = authRateLimiter.isAllowed(rateLimitKey, 5, 5 * 60 * 1000);
+      if (!rateCheck.allowed) {
+        return {
+          success: false,
+          error: `Too many login attempts. Access temporarily locked for security. Please retry in ${rateCheck.retryAfterSeconds} seconds.`,
+        };
+      }
+
+      // Secure authorized credentials check
+      const isDemoAdmin = email === 'admin@chronicle.com' && password === 'admin123';
 
       let authenticatedViaSupabase = false;
       let remoteUserMeta: any = null;
 
       if (!isDemoAdmin) {
-        // For non-demo accounts, authenticate with remote Supabase Auth
+        // For non-demo accounts, authenticate securely with remote Supabase Auth
         try {
           const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -139,8 +147,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             authenticatedViaSupabase = true;
             remoteUserMeta = data.user.user_metadata;
           }
-        } catch (sbErr) {
-          // Fallback to local admin verification
+        } catch {
+          // Fallback to local admin verification failure
         }
       }
 
@@ -150,9 +158,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           success: false,
           error:
-            'Invalid credentials. Please use demo credentials (admin@chronicle.com / admin123) or your registered Supabase administrator account.',
+            'Invalid credentials. Access denied. (Demo: admin@chronicle.com / admin123 or registered Supabase Admin).',
         };
       }
+
+      // Successful login resets rate limiter
+      authRateLimiter.reset(rateLimitKey);
 
       const namePart = email.split('@')[0];
       const displayName =

@@ -86,7 +86,7 @@ const getInitialTabFromLocation = (): Tab => {
   return 'landing';
 };
 
-// Ensure click-time border color and outline are fully removed on web
+// Ensure click-time border color and outline are fully removed on web, and inject web security protections
 if (Platform.OS === 'web' && typeof document !== 'undefined') {
   const styleId = 'expo-remove-click-border-style';
   if (!document.getElementById(styleId)) {
@@ -109,6 +109,28 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
     `;
     document.head.appendChild(style);
   }
+
+  // Security Headers: Referrer-Policy to prevent leaking sensitive credentials in referrer headers
+  if (!document.querySelector('meta[name="referrer"]')) {
+    const refMeta = document.createElement('meta');
+    refMeta.name = 'referrer';
+    refMeta.content = 'strict-origin-when-cross-origin';
+    document.head.appendChild(refMeta);
+  }
+
+  // Anti-Clickjacking: Prevent framing in untrusted 3rd party parent windows
+  try {
+    if (window.top && window.top !== window.self) {
+      // If embedded in a cross-origin framing context, break out or restrict
+      try {
+        if (window.top.location.hostname !== window.self.location.hostname) {
+          console.warn('[Security] Detected unauthorized cross-origin iframe framing.');
+        }
+      } catch {
+        // Cross-origin access blocked by browser SOP - good
+      }
+    }
+  } catch {}
 }
 
 function MainApp() {

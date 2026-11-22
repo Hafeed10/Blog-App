@@ -21,6 +21,7 @@ import {
   fetchRemoteComments,
   addRemoteComment,
 } from '../services/supabase';
+import { sanitizeUrl, sanitizeText } from '../utils/security';
 
 interface PostDetailScreenProps {
   post: Post;
@@ -125,24 +126,30 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
   const handleAddComment = async () => {
     if (!commentText.trim()) return;
 
-    const authorName = user?.name || 'You (Reader)';
-    const authorAvatar = user?.avatarUrl;
+    const safeAuthorName = sanitizeText(user?.name || 'You (Reader)', 100);
+    const safeAuthorAvatar = user?.avatarUrl ? sanitizeUrl(user.avatarUrl) : undefined;
+    const safeContent = sanitizeText(commentText.trim(), 1000);
+
+    if (!safeContent) {
+      Alert.alert('Empty Input', 'Comment text cannot be empty or contain invalid characters.');
+      return;
+    }
 
     const newComment: Comment = {
       id: `c-${Date.now()}`,
       post_id: post.id,
-      user_name: authorName,
-      user_avatar: authorAvatar,
-      content: commentText.trim(),
+      user_name: safeAuthorName,
+      user_avatar: safeAuthorAvatar,
+      content: safeContent,
       created_at: new Date().toISOString(),
     };
 
     setIsSubmittingComment(true);
 
     if (databaseStatus.tableExists) {
-      const added = await addRemoteComment(post.id, authorName, commentText.trim());
+      const added = await addRemoteComment(post.id, safeAuthorName, safeContent);
       if (added) {
-        setComments((prev) => [...prev, { ...added, user_avatar: authorAvatar || added.user_avatar }]);
+        setComments((prev) => [...prev, { ...added, user_avatar: safeAuthorAvatar || added.user_avatar }]);
       } else {
         setComments((prev) => [...prev, newComment]);
       }
@@ -180,8 +187,9 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
       // Image markdown: ![alt](url)
       const imageMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
       if (imageMatch) {
-        const altText = imageMatch[1];
-        const imageUrl = imageMatch[2];
+        const altText = sanitizeText(imageMatch[1], 150);
+        const imageUrl = sanitizeUrl(imageMatch[2]);
+        if (!imageUrl) return null; // Block dangerous protocol injections
         return (
           <View
             key={`img-${idx}`}

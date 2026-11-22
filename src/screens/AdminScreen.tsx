@@ -23,6 +23,7 @@ import { Post, Category } from '../types/blog';
 import { HistoryEvent, HistoryEventType, HistoryEventLevel } from '../types/history';
 import { CategoryDragDrop } from '../components/CategoryDragDrop';
 import { pickImageFromLibrary } from '../services/imagePickerService';
+import { safeJsonParse, sanitizeText, sanitizeUrl, sanitizeSlug } from '../utils/security';
 
 interface AdminScreenProps {
   onNavigateToTab?: (tab: 'landing' | 'home' | 'bookmarks' | 'db' | 'admin' | 'settings') => void;
@@ -341,23 +342,68 @@ export const AdminScreen: React.FC<AdminScreenProps> = ({
     }
   };
 
-  // Import Backup
+  // Import Backup with deep security sanitization and prototype pollution defense
   const handleImportJson = async () => {
     try {
       if (!importJsonInput.trim()) {
         Alert.alert('Error', 'Please paste valid JSON payload.');
         return;
       }
-      const parsed = JSON.parse(importJsonInput);
-      const postsArray = Array.isArray(parsed) ? parsed : parsed.posts;
-      if (!Array.isArray(postsArray) || postsArray.length === 0) {
-        Alert.alert('Invalid Format', 'JSON must contain an array of posts.');
+
+      // Max import size: 5MB to prevent memory exhaustion / DoS
+      if (importJsonInput.length > 5 * 1024 * 1024) {
+        Alert.alert('Payload Rejected', 'Payload exceeds the maximum safe limit of 5MB.');
         return;
       }
-      await importPostsData(postsArray);
+
+      const parsed = safeJsonParse<any>(importJsonInput, null);
+      if (!parsed) {
+        Alert.alert('Invalid Format', 'JSON syntax error or dangerous prototype keys detected.');
+        return;
+      }
+
+      const rawPostsArray = Array.isArray(parsed) ? parsed : parsed.posts;
+      if (!Array.isArray(rawPostsArray) || rawPostsArray.length === 0) {
+        Alert.alert('Invalid Format', 'JSON payload must contain an array of valid posts.');
+        return;
+      }
+
+      // Sanitize each post in the imported array to prevent injection
+      const sanitizedPosts: Post[] = rawPostsArray
+        .filter((item) => item && typeof item === 'object' && item.title && item.content)
+        .map((item, idx) => ({
+          id: String(item.id || `imported-${Date.now()}-${idx}`),
+          title: sanitizeText(item.title, 300),
+          subtitle: item.subtitle ? sanitizeText(item.subtitle, 500) : undefined,
+          slug: sanitizeSlug(item.slug || item.title),
+          content: sanitizeText(item.content, 100000),
+          cover_image: sanitizeUrl(item.cover_image, 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200'),
+          cover_style: ['banner', 'magazine', 'minimal'].includes(item.cover_style) ? item.cover_style : 'banner',
+          images: Array.isArray(item.images) ? item.images.map((img: any) => sanitizeUrl(img)).filter(Boolean) : [],
+          audio_url: item.audio_url ? sanitizeUrl(item.audio_url) : undefined,
+          audio_title: item.audio_title ? sanitizeText(item.audio_title, 200) : undefined,
+          audio_duration: item.audio_duration ? sanitizeText(item.audio_duration, 20) : undefined,
+          category: sanitizeText(item.category, 50) || 'General',
+          read_time: sanitizeText(item.read_time, 20) || '4 min',
+          author_name: sanitizeText(item.author_name, 100) || 'Staff Contributor',
+          author_avatar: item.author_avatar ? sanitizeUrl(item.author_avatar) : undefined,
+          author_role: item.author_role ? sanitizeText(item.author_role, 100) : 'Author',
+          author_phone: item.author_phone ? sanitizeText(item.author_phone, 30) : undefined,
+          likes_count: typeof item.likes_count === 'number' && item.likes_count >= 0 ? Math.floor(item.likes_count) : 0,
+          is_featured: Boolean(item.is_featured),
+          created_at: item.created_at || new Date().toISOString(),
+          updated_at: item.updated_at || new Date().toISOString(),
+        }));
+
+      if (sanitizedPosts.length === 0) {
+        Alert.alert('Validation Error', 'No valid posts found in the imported array.');
+        return;
+      }
+
+      await importPostsData(sanitizedPosts);
       setShowImportModal(false);
       setImportJsonInput('');
-      setSystemAlertMessage(`Imported ${postsArray.length} posts successfully.`);
+      setSystemAlertMessage(`Imported and secured ${sanitizedPosts.length} posts successfully.`);
     } catch (e: any) {
       Alert.alert('Import Failed', e.message || 'Invalid JSON syntax.');
     }

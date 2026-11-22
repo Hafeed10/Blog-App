@@ -21,6 +21,7 @@ import { DEFAULT_AVATAR } from '../types/auth';
 import { Category } from '../types/blog';
 import { CategoryDragDrop } from './CategoryDragDrop';
 import { pickImageFromLibrary, takePhotoWithCamera } from '../services/imagePickerService';
+import { sanitizeText, sanitizeUrl, sanitizeSlug } from '../utils/security';
 
 interface CreatePostModalProps {
   visible: boolean;
@@ -261,34 +262,40 @@ export const CreatePostModal: React.FC<CreatePostModalProps> = ({ visible, onClo
 
     setIsSubmitting(true);
 
-    const slug =
-      title
+    const safeTitle = sanitizeText(title, 300);
+    const safeSubtitle = subtitle ? sanitizeText(subtitle, 500) : '';
+    const safeContent = sanitizeText(content, 100000);
+    const safeCoverImage = sanitizeUrl(coverImage, DEFAULT_COVER_IMAGE);
+    const safeSlug = sanitizeSlug(
+      safeTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)+/g, '') +
-      '-' +
-      Math.floor(Math.random() * 1000);
+        '-' +
+        Math.floor(Math.random() * 1000)
+    );
 
     const finalCreatedAt = getSelectedCreatedAt();
-    const finalAudio = getFinalAudioUrl();
+    const finalAudio = getFinalAudioUrl() ? sanitizeUrl(getFinalAudioUrl()) : undefined;
+    const safeAttachedImages = attachedImages.map((img) => sanitizeUrl(img)).filter(Boolean);
 
     const result = await createNewPost({
-      title: title.trim(),
-      subtitle: subtitle.trim(),
-      slug,
-      content: content.trim(),
-      cover_image: coverImage,
+      title: safeTitle,
+      subtitle: safeSubtitle,
+      slug: safeSlug,
+      content: safeContent,
+      cover_image: safeCoverImage,
       cover_style: coverStyle,
-      images: attachedImages,
+      images: safeAttachedImages,
       audio_url: finalAudio,
-      audio_title: hasAudio ? audioTitle.trim() || 'Audio Edition' : undefined,
-      audio_duration: hasAudio ? audioDuration.trim() || '4:30 min' : undefined,
+      audio_title: hasAudio ? sanitizeText(audioTitle, 200) || 'Audio Edition' : undefined,
+      audio_duration: hasAudio ? sanitizeText(audioDuration, 20) || '4:30 min' : undefined,
       category,
-      read_time: readTime,
-      author_name: user?.name || authorName.trim() || 'Alex Rivera',
-      author_avatar: user?.avatarUrl || DEFAULT_AVATAR,
-      author_role: user?.role || authorRole.trim() || 'Staff Writer',
-      author_phone: user?.phoneNumber,
+      read_time: sanitizeText(readTime, 20) || '4 min',
+      author_name: sanitizeText(user?.name || authorName, 100) || 'Alex Rivera',
+      author_avatar: user?.avatarUrl ? sanitizeUrl(user.avatarUrl) : DEFAULT_AVATAR,
+      author_role: sanitizeText(user?.role || authorRole, 100) || 'Staff Writer',
+      author_phone: user?.phoneNumber ? sanitizeText(user.phoneNumber, 30) : undefined,
       is_featured: false,
       created_at: finalCreatedAt,
     });

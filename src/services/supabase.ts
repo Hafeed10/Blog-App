@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Post, Comment } from '../types/blog';
+import { sanitizeUrl, sanitizeText, sanitizeSlug, isSafeUUID } from '../utils/security';
 
 export const SUPABASE_URL = 'https://ftpwzsyajenwjfgoddwy.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_Edi2csDPvelAy-fc-ZsRcQ_PT-S8xXp';
@@ -31,7 +32,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
  * otherwise PostgREST returns "400 Bad Request: invalid input syntax for type uuid".
  */
 export function isValidUUID(id?: string | null): boolean {
-  return typeof id === 'string' && UUID_REGEX.test(id);
+  return isSafeUUID(id);
 }
 
 // Columns guaranteed to exist in the public.posts schema
@@ -150,26 +151,43 @@ export async function insertRemotePost(
   post: Omit<Post, 'id' | 'likes_count' | 'created_at'> & { created_at?: string }
 ): Promise<{ post: Post | null; error: any }> {
   try {
+    const safeTitle = sanitizeText(post.title, 300);
+    const safeSubtitle = post.subtitle ? sanitizeText(post.subtitle, 500) : '';
+    const safeSlug = sanitizeSlug(post.slug || safeTitle);
+    const safeContent = sanitizeText(post.content, 100000);
+    const safeCoverImage = sanitizeUrl(post.cover_image, 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80');
+    const safeCategory = sanitizeText(post.category, 50) || 'General';
+    const safeReadTime = sanitizeText(post.read_time, 20) || '4 min';
+    const safeAuthorName = sanitizeText(post.author_name, 100) || 'Staff Contributor';
+    const safeAuthorAvatar = sanitizeUrl(post.author_avatar);
+    const safeAuthorRole = sanitizeText(post.author_role, 100) || 'Author';
+    const safeAudioUrl = post.audio_url ? sanitizeUrl(post.audio_url) : undefined;
+    const safeAudioTitle = post.audio_title ? sanitizeText(post.audio_title, 200) : undefined;
+    const safeAudioDuration = post.audio_duration ? sanitizeText(post.audio_duration, 20) : undefined;
+    const safeImages = Array.isArray(post.images)
+      ? post.images.map((img) => sanitizeUrl(img)).filter(Boolean)
+      : undefined;
+
     const rawPayload: Record<string, any> = {
-      title: post.title,
-      subtitle: post.subtitle || '',
-      slug: post.slug,
-      content: post.content,
-      cover_image: post.cover_image,
-      category: post.category,
-      read_time: post.read_time,
-      author_name: post.author_name,
-      author_avatar: post.author_avatar,
-      author_role: post.author_role,
+      title: safeTitle,
+      subtitle: safeSubtitle,
+      slug: safeSlug,
+      content: safeContent,
+      cover_image: safeCoverImage,
+      category: safeCategory,
+      read_time: safeReadTime,
+      author_name: safeAuthorName,
+      author_avatar: safeAuthorAvatar,
+      author_role: safeAuthorRole,
       likes_count: 0,
-      is_featured: post.is_featured || false,
-      created_at: post.created_at,
-      cover_style: post.cover_style,
-      images: post.images && post.images.length > 0 ? post.images : undefined,
-      audio_url: post.audio_url,
-      audio_title: post.audio_title,
-      audio_duration: post.audio_duration,
-      author_phone: post.author_phone,
+      is_featured: Boolean(post.is_featured),
+      created_at: post.created_at || new Date().toISOString(),
+      cover_style: post.cover_style || 'banner',
+      images: safeImages,
+      audio_url: safeAudioUrl,
+      audio_title: safeAudioTitle,
+      audio_duration: safeAudioDuration,
+      author_phone: post.author_phone ? sanitizeText(post.author_phone, 30) : undefined,
     };
 
     // Sanitize to only confirmed remote columns to prevent 400 Bad Request
@@ -184,18 +202,18 @@ export async function insertRemotePost(
     if (error) {
       // Fallback: minimal essential columns only
       const minimalPayload: Record<string, any> = {
-        title: post.title,
-        subtitle: post.subtitle || '',
-        slug: post.slug,
-        content: post.content,
-        cover_image: post.cover_image,
-        category: post.category,
-        read_time: post.read_time,
-        author_name: post.author_name,
+        title: safeTitle,
+        subtitle: safeSubtitle,
+        slug: safeSlug,
+        content: safeContent,
+        cover_image: safeCoverImage,
+        category: safeCategory,
+        read_time: safeReadTime,
+        author_name: safeAuthorName,
         likes_count: 0,
       };
-      if (post.author_avatar) minimalPayload.author_avatar = post.author_avatar;
-      if (post.author_role) minimalPayload.author_role = post.author_role;
+      if (safeAuthorAvatar) minimalPayload.author_avatar = safeAuthorAvatar;
+      if (safeAuthorRole) minimalPayload.author_role = safeAuthorRole;
       if (post.created_at) minimalPayload.created_at = post.created_at;
 
       const fallbackRes = await supabase
@@ -212,10 +230,10 @@ export async function insertRemotePost(
         post: {
           ...fallbackRes.data,
           cover_style: post.cover_style,
-          images: post.images,
-          audio_url: post.audio_url,
-          audio_title: post.audio_title,
-          audio_duration: post.audio_duration,
+          images: safeImages,
+          audio_url: safeAudioUrl,
+          audio_title: safeAudioTitle,
+          audio_duration: safeAudioDuration,
           author_phone: post.author_phone,
         } as Post,
         error: null,
@@ -230,10 +248,10 @@ export async function insertRemotePost(
       post: {
         ...data,
         cover_style: post.cover_style,
-        images: post.images,
-        audio_url: post.audio_url,
-        audio_title: post.audio_title,
-        audio_duration: post.audio_duration,
+        images: safeImages,
+        audio_url: safeAudioUrl,
+        audio_title: safeAudioTitle,
+        audio_duration: safeAudioDuration,
         author_phone: post.author_phone,
       } as Post,
       error: null,
@@ -245,7 +263,7 @@ export async function insertRemotePost(
 
 /**
  * Update an existing post in Supabase.
- * Checks for valid UUID and strips out non-existent schema columns.
+ * Checks for valid UUID, validates data types, and strips out non-existent schema columns.
  */
 export async function updateRemotePost(
   postId: string,
@@ -257,8 +275,22 @@ export async function updateRemotePost(
       return { post: null, error: null };
     }
 
+    const sanitizedUpdates: Partial<Post> = { ...updates };
+    if (updates.title) sanitizedUpdates.title = sanitizeText(updates.title, 300);
+    if (updates.subtitle) sanitizedUpdates.subtitle = sanitizeText(updates.subtitle, 500);
+    if (updates.slug) sanitizedUpdates.slug = sanitizeSlug(updates.slug);
+    if (updates.content) sanitizedUpdates.content = sanitizeText(updates.content, 100000);
+    if (updates.cover_image) sanitizedUpdates.cover_image = sanitizeUrl(updates.cover_image);
+    if (updates.category) sanitizedUpdates.category = sanitizeText(updates.category, 50);
+    if (updates.author_name) sanitizedUpdates.author_name = sanitizeText(updates.author_name, 100);
+    if (updates.author_avatar) sanitizedUpdates.author_avatar = sanitizeUrl(updates.author_avatar);
+    if (updates.audio_url) sanitizedUpdates.audio_url = sanitizeUrl(updates.audio_url);
+    if (updates.images && Array.isArray(updates.images)) {
+      sanitizedUpdates.images = updates.images.map((img) => sanitizeUrl(img)).filter(Boolean);
+    }
+
     const rawPayload: Record<string, any> = {
-      ...updates,
+      ...sanitizedUpdates,
       updated_at: new Date().toISOString(),
     };
     delete rawPayload.id;
@@ -279,7 +311,7 @@ export async function updateRemotePost(
     return {
       post: {
         ...data,
-        ...updates,
+        ...sanitizedUpdates,
       } as Post,
       error: null,
     };
@@ -378,7 +410,7 @@ export async function deleteRemoteComment(commentId: string): Promise<{ success:
 }
 
 /**
- * Insert comment for a post
+ * Insert comment for a post (with strict input sanitization and XSS protection)
  */
 export async function addRemoteComment(
   postId: string,
@@ -391,14 +423,20 @@ export async function addRemoteComment(
       return null;
     }
 
+    const safeUserName = sanitizeText(userName, 100) || 'Anonymous Reader';
+    const safeContent = sanitizeText(content, 1000);
+    if (!safeContent.trim()) {
+      return null;
+    }
+
     const commentPayload: Record<string, any> = {
       post_id: postId,
-      user_name: userName,
-      content,
+      user_name: safeUserName,
+      content: safeContent,
       created_at: new Date().toISOString(),
     };
     if (userAvatar) {
-      commentPayload.user_avatar = userAvatar;
+      commentPayload.user_avatar = sanitizeUrl(userAvatar);
     }
 
     const { data, error } = await supabase

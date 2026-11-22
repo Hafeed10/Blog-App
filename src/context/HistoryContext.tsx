@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HistoryEvent, HistoryEventType, HistoryEventLevel } from '../types/history';
+import { safeJsonParse } from '../utils/security';
 
 interface HistoryContextType {
   historyEvents: HistoryEvent[];
@@ -74,7 +75,7 @@ export const HistoryProvider: React.FC<{ children: React.ReactNode }> = ({ child
       try {
         const stored = await AsyncStorage.getItem(HISTORY_STORAGE_KEY);
         if (stored) {
-          const parsed = JSON.parse(stored);
+          const parsed = safeJsonParse<HistoryEvent[]>(stored, []);
           if (Array.isArray(parsed) && parsed.length > 0) {
             setHistoryEvents(parsed);
           }

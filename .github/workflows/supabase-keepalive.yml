@@ -1,0 +1,73 @@
+name: Supabase Database Weekly Keep-Alive & Health Ping
+
+on:
+  # Runs automatically every Sunday and Wednesday at 00:00 UTC (keeps DB active before 7-day inactivity pause)
+  schedule:
+    - cron: '0 0 * * 0,3'
+  # Allows manual triggering anytime from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  ping-supabase:
+    name: Ping Supabase Database API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      # Securely read from GitHub Repository Secrets (Settings -> Secrets and variables -> Actions)
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+    steps:
+      - name: Validate Secrets
+        run: |
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::SUPABASE_URL and SUPABASE_ANON_KEY must be configured in GitHub Repository Secrets!"
+            echo "Please go to: Repository Settings -> Secrets and variables -> Actions -> New repository secret"
+            exit 1
+          fi
+      - name: Ping Supabase REST API
+        id: ping
+        run: |
+          echo "=========================================================="
+          echo "Initiating Supabase Database API Keep-Alive Ping..."
+          echo "Target Host: ${SUPABASE_URL}"
+          echo "Timestamp: $(date -u)"
+          echo "=========================================================="
+
+          # Ping the posts endpoint (select 1 row to wake the DB engine)
+          HTTP_RESPONSE=$(curl -s -w "\n%{http_code}\n%{time_total}" \
+            -X GET "${SUPABASE_URL}/rest/v1/posts?select=id&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json")
+
+          # Parse curl output
+          TOTAL_TIME=$(echo "$HTTP_RESPONSE" | tail -n 1)
+          STATUS_CODE=$(echo "$HTTP_RESPONSE" | tail -n 2 | head -n 1)
+          BODY=$(echo "$HTTP_RESPONSE" | sed '$d' | sed '$d')
+
+          echo "HTTP Status Code: ${STATUS_CODE}"
+          echo "Response Latency: ${TOTAL_TIME}s"
+          echo "Response Body: ${BODY}"
+
+          if [ "$STATUS_CODE" -ge 200 ] && [ "$STATUS_CODE" -lt 400 ]; then
+            echo "Status: SUCCESS - Supabase Database is ACTIVE and awake."
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "code=${STATUS_CODE}" >> $GITHUB_OUTPUT
+            echo "latency=${TOTAL_TIME}" >> $GITHUB_OUTPUT
+          else
+            echo "Status: WARNING/FAILED - Received HTTP ${STATUS_CODE}"
+            echo "status=failed" >> $GITHUB_OUTPUT
+            echo "code=${STATUS_CODE}" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Generate Action Summary
+        if: always()
+        run: |
+          echo "### 🚀 Supabase Weekly Keep-Alive Report" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.ping.outputs.status == 'success' && '✅ Active & Reachable' || '❌ Failed / Unreachable' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **HTTP Code**: \`${{ steps.ping.outputs.code }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Response Time**: \`${{ steps.ping.outputs.latency }}s\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Next Scheduled Run**: In 3-4 days (Prevents 7-day inactivity pause)" >> $GITHUB_STEP_SUMMARY

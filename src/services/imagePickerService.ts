@@ -7,6 +7,50 @@ export interface ImagePickerServiceOptions {
   allowsEditing?: boolean;
 }
 
+// 5 MB limit to prevent memory exhaustion & Denial of Service
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/jpg',
+];
+
+/**
+ * Validates image asset size and MIME type.
+ */
+function validateImageAsset(asset: ImagePicker.ImagePickerAsset): boolean {
+  if (asset.fileSize && asset.fileSize > MAX_IMAGE_BYTES) {
+    Alert.alert(
+      'Image Too Large',
+      `The selected image size (${(asset.fileSize / (1024 * 1024)).toFixed(1)}MB) exceeds the 5MB maximum limit. Please choose a smaller image.`
+    );
+    return false;
+  }
+
+  if (asset.base64) {
+    const estimatedBytes = asset.base64.length * 0.75;
+    if (estimatedBytes > MAX_IMAGE_BYTES) {
+      Alert.alert(
+        'Image Too Large',
+        `The selected image exceeds the 5MB maximum upload limit. Please select a smaller image.`
+      );
+      return false;
+    }
+  }
+
+  if (asset.mimeType && !ALLOWED_MIME_TYPES.includes(asset.mimeType.toLowerCase())) {
+    Alert.alert(
+      'Invalid File Type',
+      `Format "${asset.mimeType}" is not supported. Please choose a JPEG, PNG, or WebP image.`
+    );
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Converts an image picker asset into an optimal usable string format:
  * Prefer data URI (Base64) so images remain persistent across app restarts,
@@ -39,7 +83,12 @@ export async function pickImageFromLibrary(
       return null;
     }
 
-    return formatAssetUri(result.assets[0]);
+    const asset = result.assets[0];
+    if (!validateImageAsset(asset)) {
+      return null;
+    }
+
+    return formatAssetUri(asset);
   } catch (error: any) {
     console.error('Error selecting image from library:', error);
     Alert.alert(
@@ -79,7 +128,12 @@ export async function takePhotoWithCamera(
       return null;
     }
 
-    return formatAssetUri(result.assets[0]);
+    const asset = result.assets[0];
+    if (!validateImageAsset(asset)) {
+      return null;
+    }
+
+    return formatAssetUri(asset);
   } catch (error: any) {
     console.error('Error taking photo with camera:', error);
     Alert.alert(

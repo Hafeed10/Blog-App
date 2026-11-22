@@ -43,7 +43,7 @@ const INITIAL_HISTORY: HistoryEvent[] = [
     actor: 'System',
     timestamp: new Date(Date.now() - 3600000 * 12).toISOString(),
     level: 'info',
-    details: { endpoint: 'ftpwzsyajenwjfgoddwy.supabase.co', status: 'Healthy' },
+    details: { endpoint: 'Supabase Cloud Database', status: 'Healthy' },
   },
   {
     id: 'hist-seed-3',

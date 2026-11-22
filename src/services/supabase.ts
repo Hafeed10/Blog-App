@@ -3,8 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Post, Comment } from '../types/blog';
 import { sanitizeUrl, sanitizeText, sanitizeSlug, isSafeUUID } from '../utils/security';
 
-export const SUPABASE_URL = 'https://ftpwzsyajenwjfgoddwy.supabase.co';
-export const SUPABASE_ANON_KEY = 'sb_publishable_Edi2csDPvelAy-fc-ZsRcQ_PT-S8xXp';
+export const SUPABASE_URL =
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  process.env.REACT_APP_SUPABASE_URL ||
+  '';
+export const SUPABASE_ANON_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.REACT_APP_SUPABASE_ANON_KEY ||
+  '';
 
 // Initialize Supabase Client
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {

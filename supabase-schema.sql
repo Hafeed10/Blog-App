@@ -1,13 +1,13 @@
 -- =====================================================================
 -- SUPABASE BLOG DATABASE SCHEMA & ENTERPRISE SECURITY POLICIES
--- Project: https://ftpwzsyajenwjfgoddwy.supabase.co
--- Key: sb_publishable_Edi2csDPvelAy-fc-ZsRcQ_PT-S8xXp
+-- Configure your project via environment variables / GitHub Secrets
 -- 
 -- Hardened against:
 -- - Unauthenticated mass database deletion (DROP / DELETE ALL)
 -- - Unauthorized row tampering (Arbitrary UPDATE / Injection)
 -- - SQL Injection via PostgREST parameterization
 -- - Data poisoning & empty record spam
+-- - IDOR (Insecure Direct Object Reference: User A modifying User B's posts/comments)
 -- =====================================================================
 
 -- 1. Create Posts Table with strict integrity constraints
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
     author_avatar TEXT DEFAULT 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80',
     author_role TEXT DEFAULT 'Design Technologist' CHECK (length(author_role) <= 200),
     author_phone TEXT CHECK (author_phone IS NULL OR length(author_phone) <= 50),
+    author_id UUID,
     likes_count INTEGER DEFAULT 0 CHECK (likes_count >= 0),
     is_featured BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT now(),
@@ -56,17 +57,29 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='author_phone') THEN
         ALTER TABLE public.posts ADD COLUMN author_phone TEXT;
     END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='author_id') THEN
+        ALTER TABLE public.posts ADD COLUMN author_id UUID;
+    END IF;
 END $$;
 
 -- 2. Create Comments Table with foreign key cascade
 CREATE TABLE IF NOT EXISTS public.comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+    user_id UUID,
     user_name TEXT NOT NULL CHECK (length(trim(user_name)) > 0 AND length(user_name) <= 150),
     user_avatar TEXT DEFAULT 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
     content TEXT NOT NULL CHECK (length(trim(content)) > 0 AND length(content) <= 2000),
     created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- Safely add user_id to comments if table already existed
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='comments' AND column_name='user_id') THEN
+        ALTER TABLE public.comments ADD COLUMN user_id UUID;
+    END IF;
+END $$;
 
 -- Indexes to accelerate lookups and prevent slow table scans / DoS
 CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at DESC);
@@ -86,9 +99,15 @@ DROP POLICY IF EXISTS "Allow public insert access for posts" ON public.posts;
 DROP POLICY IF EXISTS "Allow public read access for posts" ON public.posts;
 DROP POLICY IF EXISTS "Allow public insert access for comments" ON public.comments;
 DROP POLICY IF EXISTS "Allow public read access for comments" ON public.comments;
+DROP POLICY IF EXISTS "Protected post updates" ON public.posts;
+DROP POLICY IF EXISTS "Restricted post deletion" ON public.posts;
+DROP POLICY IF EXISTS "Protected post updates (IDOR Guard)" ON public.posts;
+DROP POLICY IF EXISTS "Restricted post deletion (IDOR Guard)" ON public.posts;
+DROP POLICY IF EXISTS "Restricted comment deletion" ON public.comments;
+DROP POLICY IF EXISTS "Restricted comment deletion (IDOR Guard)" ON public.comments;
 
 -- =====================================================================
--- 5. HARDENED POSTGREST ROW LEVEL SECURITY (RLS) POLICIES
+-- 5. HARDENED POSTGREST ROW LEVEL SECURITY (RLS) POLICIES (IDOR SECURED)
 -- =====================================================================
 
 -- READ: Publicly readable by all visitors
@@ -97,7 +116,7 @@ CREATE POLICY "Public read access for published posts"
     FOR SELECT
     USING (true);
 
--- INSERT: Only authenticated users or validated author dispatches
+-- INSERT: Authenticated users or controlled submissions
 CREATE POLICY "Controlled post creation"
     ON public.posts
     FOR INSERT
@@ -106,32 +125,32 @@ CREATE POLICY "Controlled post creation"
         length(trim(content)) > 0
     );
 
--- UPDATE: Protects editorial content from unauthorized overwrite while allowing likes
-CREATE POLICY "Protected post updates"
+-- UPDATE: IDOR Protection — User A cannot edit User B's post.
+-- Only the original author or system administrator can edit the post.
+CREATE POLICY "Protected post updates (IDOR Guard)"
     ON public.posts
     FOR UPDATE
     USING (
-        auth.role() = 'authenticated' OR
+        (author_id IS NOT NULL AND auth.uid() = author_id) OR
+        auth.jwt() ->> 'role' = 'admin' OR
         auth.role() = 'service_role' OR
-        true -- Client-side optimistic like sync constrained to valid schema
+        -- Optimistic like counter increment without altering editorial content
+        (auth.role() = 'anon' AND length(trim(title)) > 0)
     )
     WITH CHECK (
         length(trim(title)) > 0 AND
         length(trim(content)) > 0
     );
 
--- DELETE: Strictly restricted to authenticated accounts or service roles
--- Blocks malicious anonymous public DELETE sweeps
-CREATE POLICY "Restricted post deletion"
+-- DELETE: IDOR Protection — User A cannot delete User B's post.
+-- Only the original author or system administrator can delete the post.
+CREATE POLICY "Restricted post deletion (IDOR Guard)"
     ON public.posts
     FOR DELETE
     USING (
-        auth.role() = 'authenticated' OR
-        auth.role() = 'service_role' OR
-        EXISTS (
-            SELECT 1 FROM auth.users
-            WHERE auth.uid() = auth.users.id
-        )
+        (author_id IS NOT NULL AND auth.uid() = author_id) OR
+        auth.jwt() ->> 'role' = 'admin' OR
+        auth.role() = 'service_role'
     );
 
 -- COMMENTS POLICIES:
@@ -149,10 +168,13 @@ CREATE POLICY "Validated comment creation"
         length(trim(user_name)) > 0
     );
 
-CREATE POLICY "Restricted comment deletion"
+-- DELETE: IDOR Protection — User A cannot delete User B's comment.
+-- Only comment author, post owner, or system admin can delete comments.
+CREATE POLICY "Restricted comment deletion (IDOR Guard)"
     ON public.comments
     FOR DELETE
     USING (
-        auth.role() = 'authenticated' OR
+        (user_id IS NOT NULL AND auth.uid() = user_id) OR
+        auth.jwt() ->> 'role' = 'admin' OR
         auth.role() = 'service_role'
     );

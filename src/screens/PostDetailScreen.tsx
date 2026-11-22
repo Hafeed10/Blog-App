@@ -20,6 +20,7 @@ import { Post, Comment } from '../types/blog';
 import {
   fetchRemoteComments,
   addRemoteComment,
+  SUPABASE_URL,
 } from '../services/supabase';
 import { sanitizeUrl, sanitizeText } from '../utils/security';
 
@@ -114,9 +115,10 @@ export const PostDetailScreen: React.FC<PostDetailScreenProps> = ({ post, onBack
 
   const handleShare = async () => {
     try {
+      const shareBase = SUPABASE_URL || 'https://chronicle-blog.vercel.app';
       await Share.share({
         title: post.title,
-        message: `${post.title}\n\nRead more on Chronicle:\nhttps://ftpwzsyajenwjfgoddwy.supabase.co/posts/${post.slug}`,
+        message: `${post.title}\n\nRead more on Chronicle:\n${shareBase}/posts/${post.slug}`,
       });
     } catch {
       // ignore

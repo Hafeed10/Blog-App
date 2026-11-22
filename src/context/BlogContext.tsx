@@ -12,6 +12,7 @@ import {
   DatabaseStatus,
 } from '../services/supabase';
 import { useHistory } from './HistoryContext';
+import { useAuth } from './AuthContext';
 import { safeJsonParse, sanitizeText } from '../utils/security';
 
 interface BlogContextType {
@@ -62,6 +63,7 @@ const DELETED_POSTS_STORAGE_KEY = '@app_blog_deleted_ids_v3';
 
 export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { addHistoryEvent } = useHistory();
+  const { user, isAdmin } = useAuth();
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
   const [categories, setCategories] = useState<string[]>([...DEFAULT_CATEGORIES]);
   const [selectedCategory, setSelectedCategory] = useState<Category>('All');
@@ -380,6 +382,21 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, error: 'Post not found' };
     }
 
+    // IDOR Protection: verify user is authorized (Admin or Author of the post)
+    const isOwner =
+      user &&
+      ((user.name &&
+        existing.author_name &&
+        user.name.trim().toLowerCase() === existing.author_name.trim().toLowerCase()) ||
+        (user.email && existing.author_role && user.email.toLowerCase().includes('admin')));
+
+    if (!isAdmin && !isOwner) {
+      return {
+        success: false,
+        error: "Unauthorized (IDOR Protection): You cannot edit another author's post.",
+      };
+    }
+
     const updatedPost: Post = {
       ...existing,
       ...updates,
@@ -401,7 +418,7 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
       type: 'POST_UPDATE',
       title: 'Post Updated',
       description: `Updated dispatch "${updatedPost.title}".`,
-      actor: 'Admin',
+      actor: user?.name || (isAdmin ? 'Admin' : 'Author'),
       level: 'info',
       targetId: postId,
       details: updates,
@@ -413,7 +430,26 @@ export const BlogProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Delete post
   const deletePost = async (postId: string): Promise<{ success: boolean; error?: string }> => {
     const targetPost = posts.find((p) => p.id === postId);
-    const postTitle = targetPost ? targetPost.title : postId;
+    if (!targetPost) {
+      return { success: false, error: 'Post not found' };
+    }
+
+    // IDOR Protection: verify user is authorized (Admin or Author of the post)
+    const isOwner =
+      user &&
+      ((user.name &&
+        targetPost.author_name &&
+        user.name.trim().toLowerCase() === targetPost.author_name.trim().toLowerCase()) ||
+        (user.email && targetPost.author_role && user.email.toLowerCase().includes('admin')));
+
+    if (!isAdmin && !isOwner) {
+      return {
+        success: false,
+        error: "Unauthorized (IDOR Protection): You cannot delete another author's post.",
+      };
+    }
+
+    const postTitle = targetPost.title;
 
     const remainingPosts = posts.filter((p) => p.id !== postId);
     setPosts(remainingPosts);

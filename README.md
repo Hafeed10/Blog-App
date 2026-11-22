@@ -8,7 +8,7 @@ A next-generation ("New Model Design") editorial blog application built with **R
 
 - **Editorial Magazine & Bento Layout**: Glassmorphism cards, frosted headers, glowing category tags, and responsive typography.
 - **Hero Trending Carousel**: Large featured cover story with multi-stop gradient overlays and reading time calculation.
-- **Supabase Cloud Backend**: Connected to your live Supabase project (`ftpwzsyajenwjfgoddwy.supabase.co`) with fallback offline resilience.
+- **Supabase Cloud Backend**: Connected to your live Supabase project with fallback offline resilience.
 - **Live / Offline Dual Mode**: If database tables haven't been created yet, the app gracefully loads rich mock stories and provides a 1-click in-app status monitor without crashing.
 - **Interactive Story Viewer**:
   - Immersive hero cover image with author follow button

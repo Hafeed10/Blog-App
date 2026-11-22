@@ -213,7 +213,7 @@ CREATE POLICY "Allow public insert access for comments"
               <Text style={[styles.stepDesc, { color: colors.textSecondary }]}>
                 Navigate to your project SQL editor in browser:
                 {'\n'}
-                https://supabase.com/dashboard/project/ftpwzsyajenwjfgoddwy
+                https://supabase.com/dashboard
               </Text>
             </View>
           </View>
